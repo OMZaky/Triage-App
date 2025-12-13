@@ -1,0 +1,17 @@
+# --- Database & Security ---
+patients_data.txt
+admin_config.txt
+security.bin
+
+# --- Executables & Build Files ---
+*.exe
+app
+*.o
+
+# --- Python Cache ---
+__pycache__/
+*.pyc
+
+# --- OS Junk ---
+.DS_Store
+Thumbs.db
