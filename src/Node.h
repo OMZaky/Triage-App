@@ -7,23 +7,20 @@
 // The Building Block of the Heap
 struct Node {
     int id;
-    int priority;       // Lower value = Higher urgency
-    std::string name;   // Patient Name
+    int priority;
+    int age;            
+    std::string name;
+    std::string description; 
 
-    // Pointers for Circular Doubly Linked List
-    Node* left;
-    Node* right;
-
-    // Pointers for Tree Hierarchy
-    Node* parent;
-    Node* child;
-
+    // Pointers
+    Node *left, *right, *parent, *child;
+    
     int degree;         // Number of children
     bool mark;          // Lost a child since last made a child?
 
     // Constructor
-    Node(int _id, int _priority, std::string _name);
-
+Node(int _id, int _priority, int _age, std::string _name, std::string _desc);
+    
     // --- CDLL Operations (Member 1 implements these in Node.cpp) ---
     // Adds 'other' node to the right of 'this' node
     void addSibling(Node* other);

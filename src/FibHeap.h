@@ -31,8 +31,8 @@ public:
     ~FibonacciHeap(); // Member 2: Must delete all nodes!
 
     // Member 2
-    void insert(int id, int priority, std::string name);
-    
+void insert(int id, int priority, int age, std::string name, std::string desc);    
+
     // Member 2
     Node* peek(); 
     

@@ -2,15 +2,16 @@
 
 // ASSIGNED TO: MEMBER 1
 
-Node::Node(int _id, int _priority, std::string _name) {
+Node::Node(int _id, int _priority, int _age, std::string _name, std::string _desc) {
     id = _id;
     priority = _priority;
+    age = _age;          // <--- NEW
     name = _name;
+    description = _desc; // <--- NEW
     
-    // Circular logic: Point to self initially
+    // Pointers (Circle of 1)
     left = this;
     right = this;
-    
     parent = nullptr;
     child = nullptr;
     degree = 0;

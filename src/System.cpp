@@ -8,18 +8,24 @@
 System::System() {
     isLoggedIn = false;
 
+    nextId = 1; // Default start ID
+
     // --- PERSISTENCE: LOAD DATA ON STARTUP ---
     // We try to open the database file. If it exists, we rebuild the heap.
     std::ifstream file("patients_data.txt");
     if (file.is_open()) {
-        int id, prio;
-        std::string name;
+        int id, prio, age;
+        std::string name, desc;
         
         // Read line by line: [ID] [PRIORITY] [NAME]
         // Note: This assumes names don't have spaces for simplicity. 
         // If names have spaces, we'd need std::getline.
-        while (file >> id >> prio >> name) {
-            heap.insert(id, prio, name);
+        while (file >> id >> prio >> age >> name >> desc) {
+            heap.insert(id, prio, age, name, desc);
+
+            if (id >= nextId) {
+                nextId = id + 1;
+            }
         }
         file.close();
         // We don't print anything here to avoid confusing the Python GUI during startup
@@ -83,26 +89,38 @@ void System::run() {
 void System::processCommand(std::string cmd) {
     
     if (cmd == "ADD") {
-        int id, prio;
-        std::string name;
+        int prio, age;
+        std::string name, desc;
         // Expects: ADD [ID] [PRIORITY] [NAME]
-        std::cin >> id >> prio >> name;
+        std::cin >> prio >> age >> name >> desc;
+
+        if (prio < 1 || prio > 10) {
+            std::cout << "ERROR: Priority must be 1-10" << std::endl;
+            return;
+        }
         
-        heap.insert(id, prio, name);
-        std::cout << "SUCCESS_ADD " << name << std::endl;
+        heap.insert(nextId, prio, age, name, desc);
+        std::cout << "SUCCESS_ADD " << name << " ID:" << nextId << std::endl;
+        
+        nextId++; // Increment for next patient
     }
     
+    // CRITICAL: Member 2's extractMin() returns a pointer. 
+    // We must delete it here to prevent memory leaks.
     else if (cmd == "EXTRACT") {
-        Node* minNode = heap.extractMin();
-        if (minNode) {
-            // Output: DATA [ID] [PRIORITY] [NAME]
-            std::cout << "DATA " << minNode->id << " " 
-                      << minNode->priority << " " 
-                      << minNode->name << std::endl;
-            
+        Node* n = heap.extractMin();
+        if (n) {
+            // Output: DATA [ID] [PRIO] [AGE] [NAME] [DESC]
+            std::cout << "DATA " << n->id << " " 
+                      << n->priority << " " 
+                      << n->age << " "
+                      << n->name << " " 
+                      << n->description << std::endl;
+
             // CRITICAL: Member 2's extractMin() returns a pointer. 
             // We must delete it here to prevent memory leaks.
-            delete minNode; 
+
+            delete n;
         } else {
             std::cout << "EMPTY" << std::endl;
         }

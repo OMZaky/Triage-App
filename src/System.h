@@ -11,6 +11,7 @@ private:
     FibonacciHeap heap;
     Auth auth;
     bool isLoggedIn;
+    int nextId;
 
     void processCommand(std::string cmd);
 

@@ -78,21 +78,41 @@ def perform_login():
         lbl_login_err.config(text="Access Denied: Incorrect Password", fg=COLORS["danger"])
 
 def add_patient():
-    p_id, p_prio, p_name = entry_id.get(), entry_prio.get(), entry_name.get()
-    if not p_id or not p_prio or not p_name:
-        lbl_status.config(text="⚠ Missing Fields", fg=COLORS["danger"])
-        return
+    p_name = entry_name.get()
+    p_age = entry_age.get()
+    p_prio = entry_prio.get()
+    p_desc = entry_desc.get()
     
-    clean_name = p_name.replace(" ", "_")
-    resp = send_cmd(f"ADD {p_id} {p_prio} {clean_name}")
+    # Validation
+    if not p_name or not p_age or not p_prio or not p_desc:
+        lbl_status.config(text="⚠ All fields required", fg=COLORS["danger"])
+        return
+        
+    if not p_prio.isdigit() or int(p_prio) < 1 or int(p_prio) > 10:
+        lbl_status.config(text="⚠ Priority must be 1-10", fg=COLORS["danger"])
+        return
+
+    # Underscore Protocol: Replace spaces so C++ cin doesn't break
+    safe_name = p_name.replace(" ", "_")
+    safe_desc = p_desc.replace(" ", "_")
+
+    # Send: ADD [PRIO] [AGE] [NAME] [DESC]
+    resp = send_cmd(f"ADD {p_prio} {p_age} {safe_name} {safe_desc}")
     
     if "SUCCESS" in resp:
-        lbl_status.config(text=f"✔ Registered: {p_name}", fg=COLORS["success"])
-        entry_id.delete(0, tk.END)
-        entry_prio.delete(0, tk.END)
+        # resp format: SUCCESS_ADD John_Doe ID:105
+        parts = resp.split(":")
+        new_id = parts[1] if len(parts) > 1 else "?"
+        lbl_status.config(text=f"✔ Registered ID {new_id}", fg=COLORS["success"])
+        
+        # Clear fields
         entry_name.delete(0, tk.END)
+        entry_age.delete(0, tk.END)
+        entry_prio.delete(0, tk.END)
+        entry_desc.delete(0, tk.END)
     else:
         lbl_status.config(text=f"Error: {resp}", fg=COLORS["danger"])
+
 
 def extract_patient():
     resp = send_cmd("EXTRACT")
@@ -100,11 +120,17 @@ def extract_patient():
         lbl_big_status.config(text="No Critical Patients", fg=COLORS["subtext"])
         lbl_patient_detail.config(text="Queue is empty")
     elif "DATA" in resp:
-        parts = resp.split() # DATA ID PRIO NAME
-        if len(parts) >= 4:
-            p_name = parts[3].replace("_", " ")
+        # Parse: DATA [ID] [PRIO] [AGE] [NAME] [DESC]
+        parts = resp.split() 
+        if len(parts) >= 6:
+            p_id = parts[1]
+            p_prio = parts[2]
+            p_age = parts[3]
+            p_name = parts[4].replace("_", " ") # Restore spaces
+            p_desc = parts[5].replace("_", " ") # Restore spaces
+            
             lbl_big_status.config(text=f"Treating: {p_name}", fg=COLORS["primary"])
-            lbl_patient_detail.config(text=f"ID: {parts[1]}  |  Priority Score: {parts[2]}")
+            lbl_patient_detail.config(text=f"ID: {p_id} | Age: {p_age} | Priority: {p_prio}\n\nCondition: {p_desc}")
 
 # ==========================================
 # 4. GUI COMPONENTS (MODERN STYLING)
@@ -168,10 +194,10 @@ def create_input(label, entry_var):
     e.pack(fill="x", pady=(5, 15), ipady=5)
     return e
 
-entry_name = tk.Entry(left_col) # Dummy init
 entry_name = create_input("Full Name", None)
-entry_id = create_input("Patient ID", None)
-entry_prio = create_input("Triage Score (1=Critical)", None)
+entry_age = create_input("Age", None)         # <--- New
+entry_prio = create_input("Priority (1-10)", None)
+entry_desc = create_input("Description", None) # <--- New
 
 btn_add = tk.Button(left_col, text="+ Register Patient", command=add_patient, bg=COLORS["success"], fg="white", 
                     font=f_bold, relief="flat", cursor="hand2", pady=10)

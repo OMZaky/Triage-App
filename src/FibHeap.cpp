@@ -15,9 +15,9 @@ FibonacciHeap::~FibonacciHeap() {
     // For now, we leave it empty to prevent compile errors
 }
 
-void FibonacciHeap::insert(int id, int priority, std::string name) {
-    Node* newNode = new Node(id, priority, name);
-    
+void FibonacciHeap::insert(int id, int priority, int age, std::string name, std::string desc) {
+Node* newNode = new Node(id, priority, age, name, desc);    
+
     if (minNode == nullptr) {
         minNode = newNode;
         // Circular links logic handles itself in Node constructor usually, 
@@ -112,8 +112,15 @@ void FibonacciHeap::saveToFile(std::string filename) {
 }
 
 void FibonacciHeap::_saveRecursive(Node* node, std::ofstream& file) {
+    
     if (node == nullptr) return;
-    file << node->id << " " << node->priority << " " << node->name << "\n";
+
+    file << node->id << " " 
+         << node->priority << " " 
+         << node->age << " " 
+         << node->name << " " 
+         << node->description << "\n";
+
     if (node->child != nullptr) {
         Node* start = node->child;
         Node* current = start;
