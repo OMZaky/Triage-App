@@ -83,24 +83,34 @@ def add_patient():
     p_prio = entry_prio.get()
     p_desc = entry_desc.get()
     
-    # Validation
+    # 1. Check for Empty Fields
     if not p_name or not p_age or not p_prio or not p_desc:
         lbl_status.config(text="⚠ All fields required", fg=COLORS["danger"])
         return
+
+    # 2. VALIDATE AGE (Must be a number)
+    if not p_age.isdigit():
+        lbl_status.config(text="⚠ Age must be a number", fg=COLORS["danger"])
+        return
         
+    # Optional: Logic to limit age to realistic numbers (0-120)
+    if int(p_age) < 0 or int(p_age) > 120:
+        lbl_status.config(text="⚠ Invalid Age (0-120)", fg=COLORS["danger"])
+        return
+
+    # 3. VALIDATE PRIORITY (Must be 1-10)
     if not p_prio.isdigit() or int(p_prio) < 1 or int(p_prio) > 10:
         lbl_status.config(text="⚠ Priority must be 1-10", fg=COLORS["danger"])
         return
 
-    # Underscore Protocol: Replace spaces so C++ cin doesn't break
+    # 4. Underscore Protocol (Replace spaces)
     safe_name = p_name.replace(" ", "_")
     safe_desc = p_desc.replace(" ", "_")
 
-    # Send: ADD [PRIO] [AGE] [NAME] [DESC]
+    # 5. Send to C++
     resp = send_cmd(f"ADD {p_prio} {p_age} {safe_name} {safe_desc}")
     
     if "SUCCESS" in resp:
-        # resp format: SUCCESS_ADD John_Doe ID:105
         parts = resp.split(":")
         new_id = parts[1] if len(parts) > 1 else "?"
         lbl_status.config(text=f"✔ Registered ID {new_id}", fg=COLORS["success"])
@@ -112,7 +122,6 @@ def add_patient():
         entry_desc.delete(0, tk.END)
     else:
         lbl_status.config(text=f"Error: {resp}", fg=COLORS["danger"])
-
 
 def extract_patient():
     resp = send_cmd("EXTRACT")
