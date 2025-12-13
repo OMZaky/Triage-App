@@ -1,13 +1,16 @@
 import tkinter as tk
 from tkinter import messagebox
 import subprocess
+import os
 
 # ASSIGNED TO: MEMBER 5
 
 # --- CONNECT TO C++ ---
 # Ensure you compile with: g++ main.cpp System.cpp FibHeap.cpp Node.cpp Auth.cpp -o app
+exe_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "app.exe"))
+
 proc = subprocess.Popen(
-    ['./app'], # Use 'app.exe' on Windows
+    [exe_path], 
     stdin=subprocess.PIPE,
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,

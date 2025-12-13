@@ -1,30 +1,31 @@
 @echo off
 echo ==========================================
-echo      VitalSort: Compiling C++ Backend...
+echo      VitalSort: Compiling Backend...
 echo ==========================================
 
-:: 1. Compile the C++ code
-g++ *.cpp -o app
+:: 1. Compile everything in src/ and output 'app.exe' to the ROOT folder
+g++ src/*.cpp -o app.exe
+
 if %errorlevel% neq 0 (
     echo.
-    echo [ERROR] Compilation Failed! See errors above.
+    echo [ERROR] Compilation Failed!
     pause
     exit /b
 )
 
-echo [SUCCESS] Compilation complete. app.exe updated.
+echo [SUCCESS] Backend ready.
 echo.
 
-:: 2. Launch the Python GUI
+:: 2. Launch the Python GUI from the 'gui' folder
 echo ==========================================
-echo      Launching Python GUI...
+echo      Launching Interface...
 echo ==========================================
 
-:: Try 'python', if that fails try 'py' (common on Windows)
-python GUI.py || py GUI.py
+:: We pass "../app.exe" as an argument so Python knows where the backend is
+cd gui
+python vital_gui.py
+cd ..
 
 if %errorlevel% neq 0 (
-    echo.
-    echo [ERROR] Python script crashed or Python is not installed.
     pause
 )
