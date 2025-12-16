@@ -30,6 +30,8 @@ public:
     FibonacciHeap();
     ~FibonacciHeap(); // Member 2: Must delete all nodes!
 
+    int getNumNodes();
+
     // Member 2
 void insert(int id, int priority, int age, std::string name, std::string desc);    
 

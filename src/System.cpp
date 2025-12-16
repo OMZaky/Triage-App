@@ -137,6 +137,15 @@ void System::processCommand(std::string cmd) {
         }
     }
 
+    else if (cmd == "STATS") {
+        int count = heap.getNumNodes();
+        // Estimation logic: 15 minutes per patient
+        int waitTime = count * 15; 
+        
+        // Output format: STATS COUNT:[N] WAIT:[Mins]
+        std::cout << "STATS COUNT:" << count << " WAIT:" << waitTime << std::endl;
+    }
+
     else if (cmd == "UPDATE") {
         int id, newPrio;
         // Expects: UPDATE [ID] [NEW_PRIORITY]
@@ -148,6 +157,8 @@ void System::processCommand(std::string cmd) {
         heap.decreaseKey(id, newPrio); 
         std::cout << "SUCCESS_UPDATE" << std::endl;
     }
+
+
     
     else if (cmd == "CHANGE_PASS") {
         std::string newPass;

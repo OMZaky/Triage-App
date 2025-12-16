@@ -20,15 +20,16 @@ COLORS = {
 }
 
 # ==========================================
-# 2. BACKEND CONNECTION (Robust)
+# 2. BACKEND CONNECTION
 # ==========================================
 print("--- STARTING VITALSORT UI ---")
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
+# Look for app.exe in the parent folder
 exe_path = os.path.abspath(os.path.join(script_dir, "..", "app.exe"))
 
 if not os.path.exists(exe_path):
-    exe_path = os.path.abspath(os.path.join(script_dir, "..", "app")) # Linux/Mac fallback
+    exe_path = os.path.abspath(os.path.join(script_dir, "..", "app")) # Fallback
 
 if not os.path.exists(exe_path):
     print(f"[ERROR] Backend not found at: {exe_path}")
@@ -51,6 +52,7 @@ except Exception as e:
 # ==========================================
 # 3. LOGIC FUNCTIONS
 # ==========================================
+
 def send_cmd(command):
     if proc.poll() is not None: return "ERROR: Backend Dead"
     try:
@@ -68,12 +70,31 @@ def safe_exit():
     root.destroy()
     sys.exit(0)
 
+# --- NEW: STATS UPDATE FUNCTION ---
+def update_stats():
+    """Silently asks C++ for current queue size and wait time."""
+    resp = send_cmd("STATS")
+    if "STATS" in resp:
+        # Expected format: STATS COUNT:5 WAIT:75
+        try:
+            parts = resp.split()
+            count_part = parts[1].split(":")[1]
+            wait_part = parts[2].split(":")[1]
+            
+            # These labels are created in Section 4 (Layout)
+            lbl_wait_time.config(text=f"{wait_part} min")
+            lbl_queue_count.config(text=f"{count_part} Patients")
+        except:
+            pass # Ignore parsing errors during startup
+
 def perform_login():
     pwd = entry_pass.get()
     resp = send_cmd(f"LOGIN {pwd}")
     if "SUCCESS" in resp:
         login_frame.pack_forget()
         main_layout.pack(fill="both", expand=True)
+        # Trigger the first stats update
+        update_stats()
     else:
         lbl_login_err.config(text="Access Denied: Incorrect Password", fg=COLORS["danger"])
 
@@ -83,31 +104,23 @@ def add_patient():
     p_prio = entry_prio.get()
     p_desc = entry_desc.get()
     
-    # 1. Check for Empty Fields
+    # Validation
     if not p_name or not p_age or not p_prio or not p_desc:
         lbl_status.config(text="⚠ All fields required", fg=COLORS["danger"])
         return
 
-    # 2. VALIDATE AGE (Must be a number)
     if not p_age.isdigit():
         lbl_status.config(text="⚠ Age must be a number", fg=COLORS["danger"])
         return
         
-    # Optional: Logic to limit age to realistic numbers (0-120)
-    if int(p_age) < 0 or int(p_age) > 120:
-        lbl_status.config(text="⚠ Invalid Age (0-120)", fg=COLORS["danger"])
-        return
-
-    # 3. VALIDATE PRIORITY (Must be 1-10)
     if not p_prio.isdigit() or int(p_prio) < 1 or int(p_prio) > 10:
         lbl_status.config(text="⚠ Priority must be 1-10", fg=COLORS["danger"])
         return
 
-    # 4. Underscore Protocol (Replace spaces)
+    # Underscore Protocol
     safe_name = p_name.replace(" ", "_")
     safe_desc = p_desc.replace(" ", "_")
 
-    # 5. Send to C++
     resp = send_cmd(f"ADD {p_prio} {p_age} {safe_name} {safe_desc}")
     
     if "SUCCESS" in resp:
@@ -120,6 +133,9 @@ def add_patient():
         entry_age.delete(0, tk.END)
         entry_prio.delete(0, tk.END)
         entry_desc.delete(0, tk.END)
+        
+        # Refresh Dashboard Stats
+        update_stats()
     else:
         lbl_status.config(text=f"Error: {resp}", fg=COLORS["danger"])
 
@@ -135,18 +151,21 @@ def extract_patient():
             p_id = parts[1]
             p_prio = parts[2]
             p_age = parts[3]
-            p_name = parts[4].replace("_", " ") # Restore spaces
-            p_desc = parts[5].replace("_", " ") # Restore spaces
+            p_name = parts[4].replace("_", " ")
+            p_desc = parts[5].replace("_", " ")
             
             lbl_big_status.config(text=f"Treating: {p_name}", fg=COLORS["primary"])
             lbl_patient_detail.config(text=f"ID: {p_id} | Age: {p_age} | Priority: {p_prio}\n\nCondition: {p_desc}")
+    
+    # Refresh Dashboard Stats
+    update_stats()
 
 # ==========================================
-# 4. GUI COMPONENTS (MODERN STYLING)
+# 4. GUI COMPONENTS (LAYOUT)
 # ==========================================
 root = tk.Tk()
 root.title("VitalSort Triage System")
-root.geometry("900x600")
+root.geometry("1000x650")
 root.configure(bg=COLORS["bg"])
 root.protocol("WM_DELETE_WINDOW", safe_exit)
 
@@ -156,7 +175,7 @@ f_sub = ("Segoe UI", 12)
 f_norm = ("Segoe UI", 10)
 f_bold = ("Segoe UI", 10, "bold")
 
-# --- LOGIN SCREEN (Centered Card) ---
+# --- LOGIN SCREEN ---
 login_frame = tk.Frame(root, bg=COLORS["bg"])
 login_card = tk.Frame(login_frame, bg=COLORS["card"], padx=40, pady=40, relief="flat")
 login_card.place(relx=0.5, rely=0.5, anchor="center")
@@ -177,7 +196,7 @@ lbl_login_err.pack()
 
 login_frame.pack(fill="both", expand=True)
 
-# --- MAIN DASHBOARD (Split Layout) ---
+# --- MAIN DASHBOARD ---
 main_layout = tk.Frame(root, bg=COLORS["bg"])
 
 # HEADER
@@ -191,9 +210,9 @@ content = tk.Frame(main_layout, bg=COLORS["bg"], padx=20, pady=20)
 content.pack(fill="both", expand=True)
 
 # LEFT COLUMN: INPUT FORM
-left_col = tk.Frame(content, bg=COLORS["card"], width=300, padx=20, pady=20)
+left_col = tk.Frame(content, bg=COLORS["card"], width=320, padx=20, pady=20)
 left_col.pack(side="left", fill="y", padx=(0, 20))
-left_col.pack_propagate(False) # Force width
+left_col.pack_propagate(False)
 
 tk.Label(left_col, text="Register Patient", font=("Segoe UI", 14, "bold"), bg=COLORS["card"], fg=COLORS["text"]).pack(anchor="w", pady=(0, 20))
 
@@ -204,9 +223,9 @@ def create_input(label, entry_var):
     return e
 
 entry_name = create_input("Full Name", None)
-entry_age = create_input("Age", None)         # <--- New
-entry_prio = create_input("Priority (1-10)", None)
-entry_desc = create_input("Description", None) # <--- New
+entry_age = create_input("Age", None)
+entry_prio = create_input("Triage Score (1-10)", None)
+entry_desc = create_input("Condition Description", None)
 
 btn_add = tk.Button(left_col, text="+ Register Patient", command=add_patient, bg=COLORS["success"], fg="white", 
                     font=f_bold, relief="flat", cursor="hand2", pady=10)
@@ -214,23 +233,39 @@ btn_add.pack(fill="x", pady=10)
 lbl_status = tk.Label(left_col, text="System Ready", font=f_norm, bg=COLORS["card"], fg=COLORS["subtext"])
 lbl_status.pack(pady=10)
 
-# RIGHT COLUMN: ACTION CENTER
+# RIGHT COLUMN: ACTION CENTER & STATS
 right_col = tk.Frame(content, bg=COLORS["bg"])
 right_col.pack(side="left", fill="both", expand=True)
 
-# Status Card
-status_card = tk.Frame(right_col, bg=COLORS["card"], padx=30, pady=40)
+# 1. NEW: Stats Row (Wait Time & Count)
+stats_frame = tk.Frame(right_col, bg=COLORS["bg"])
+stats_frame.pack(fill="x", pady=(0, 20))
+
+def create_stat_card(parent, title, color):
+    card = tk.Frame(parent, bg=COLORS["card"], padx=20, pady=15)
+    card.pack(side="left", fill="x", expand=True, padx=5)
+    tk.Label(card, text=title, font=("Segoe UI", 10, "bold"), bg=COLORS["card"], fg=COLORS["subtext"]).pack(anchor="w")
+    lbl = tk.Label(card, text="0", font=("Segoe UI", 20, "bold"), bg=COLORS["card"], fg=color)
+    lbl.pack(anchor="w")
+    return lbl
+
+# THESE ARE THE VARIABLES THAT WERE "UNDEFINED" BEFORE
+lbl_wait_time = create_stat_card(stats_frame, "Est. Wait Time", COLORS["danger"])
+lbl_queue_count = create_stat_card(stats_frame, "Patients in Queue", COLORS["primary"])
+
+# 2. Existing Status Card
+status_card = tk.Frame(right_col, bg=COLORS["card"], padx=30, pady=30)
 status_card.pack(fill="x", pady=(0, 20))
 
-tk.Label(status_card, text="Current Action Required", font=f_bold, bg=COLORS["card"], fg=COLORS["subtext"]).pack()
-lbl_big_status = tk.Label(status_card, text="Waiting for Input...", font=("Segoe UI", 24, "bold"), bg=COLORS["card"], fg=COLORS["text"])
-lbl_big_status.pack(pady=10)
-lbl_patient_detail = tk.Label(status_card, text="-", font=("Segoe UI", 12), bg=COLORS["card"], fg=COLORS["primary"])
-lbl_patient_detail.pack()
+tk.Label(status_card, text="Current Triage Action", font=("Segoe UI", 10, "bold"), bg=COLORS["card"], fg=COLORS["subtext"]).pack(anchor="w")
+lbl_big_status = tk.Label(status_card, text="Waiting for Input...", font=("Segoe UI", 18, "bold"), bg=COLORS["card"], fg=COLORS["text"])
+lbl_big_status.pack(pady=10, anchor="w")
+lbl_patient_detail = tk.Label(status_card, text="-", font=("Segoe UI", 11), bg=COLORS["card"], fg=COLORS["primary"], justify="left")
+lbl_patient_detail.pack(anchor="w")
 
-# Big Action Button
+# 3. Existing Extract Button
 btn_extract = tk.Button(right_col, text="CALL NEXT PATIENT", command=extract_patient, bg=COLORS["danger"], fg="white", 
-                        font=("Segoe UI", 14, "bold"), relief="flat", cursor="hand2", pady=20)
+                        font=("Segoe UI", 12, "bold"), relief="flat", cursor="hand2", pady=15)
 btn_extract.pack(fill="x")
 
 # --- INITIALIZATION ---

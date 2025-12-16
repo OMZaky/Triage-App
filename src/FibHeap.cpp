@@ -130,3 +130,8 @@ void FibonacciHeap::_saveRecursive(Node* node, std::ofstream& file) {
         } while (current != start);
     }
 }
+
+
+int FibonacciHeap::getNumNodes() {
+    return numNodes;
+}
