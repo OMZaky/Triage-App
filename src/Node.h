@@ -16,7 +16,7 @@ struct Node {
     Node *left, *right, *parent, *child;
     
     int degree;         // Number of children
-    bool mark;          // Lost a child since last made a child?
+    bool marked;          // Lost a child since last made a child?
 
     // Constructor
 Node(int _id, int _priority, int _age, std::string _name, std::string _desc);
@@ -27,6 +27,10 @@ Node(int _id, int _priority, int _age, std::string _name, std::string _desc);
     
     // Removes 'this' node from the list (re-links left and right)
     void removeSelf();
+
+    void addChild(Node* newChild);
+    void removeChild(Node* target);
+
 };
 
 #endif
