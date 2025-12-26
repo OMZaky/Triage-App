@@ -67,15 +67,16 @@ Node* FibonacciHeap::extractMin() {
         // FIXED: Array Erasure (No .erase)
         nodeLookup[z->id] = nullptr;
 
-        // CRITICAL FIX: Check if z is the only node BEFORE removeSelf changes z's pointers
+        // CRITICAL FIX: Save these BEFORE removeSelf changes z's pointers
         bool wasOnlyNode = (z == z->right);
+        Node* nextNode = z->right;  // Save the next node before removal
         
         z->removeSelf();
 
         if (wasOnlyNode) {
             minNode = nullptr;
         } else {
-            minNode = z->right;
+            minNode = nextNode;  // Use saved pointer, not z->right
             consolidate();
         }
         numNodes--;
