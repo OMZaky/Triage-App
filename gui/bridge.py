@@ -71,6 +71,9 @@ class SystemBridge:
             if sys.platform == "win32":
                 creation_flags = subprocess.CREATE_NO_WINDOW
             
+            # Set working directory to project root (where triage.exe is)
+            project_root = os.path.dirname(self.exe_path)
+            
             self.process = subprocess.Popen(
                 [self.exe_path],
                 stdin=subprocess.PIPE,
@@ -78,6 +81,7 @@ class SystemBridge:
                 stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,  # Line buffered
+                cwd=project_root,  # Run from project root so data files stay there
                 creationflags=creation_flags
             )
             

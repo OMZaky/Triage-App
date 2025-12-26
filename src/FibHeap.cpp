@@ -209,9 +209,16 @@ void FibonacciHeap::updatePriority(int id, int newPriority) {
 void FibonacciHeap::removePatient(int id) {
     if (id < 0 || id >= MAX_PID || nodeLookup[id] == nullptr) return;
 
-    // Decrease to negative infinity (using -9999 as a proxy)
+    // Decrease to negative infinity to force it to top
     updatePriority(id, -9999); 
-    extractMin(); 
+    
+    // Extract it
+    Node* removedNode = extractMin();
+    
+    // CRITICAL FIX: Delete the node to free memory
+    if (removedNode != nullptr) {
+        delete removedNode;
+    }
 }
 
 void FibonacciHeap::merge(FibonacciHeap& other) {

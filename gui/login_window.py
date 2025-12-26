@@ -1,7 +1,11 @@
 """
-TriageOS - Login Window Module (CustomTkinter)
+TriageOS - Login Frame Module (CustomTkinter)
 Modern authentication GUI for the medical triage system.
 Uses CustomTkinter for a professional dark-mode appearance.
+
+ARCHITECTURE:
+    This is a Frame (ctk.CTkFrame), not a Window.
+    It is designed to be embedded in 'main.py'.
 """
 
 import customtkinter as ctk
@@ -12,114 +16,101 @@ from typing import Callable, Optional
 # Import the bridge for backend communication
 from bridge import SystemBridge
 
-# Configure CustomTkinter appearance
-ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("blue")
-
-
-class LoginWindow(ctk.CTk):
+class LoginFrame(ctk.CTkFrame):
     """
-    Modern authentication window for TriageOS using CustomTkinter.
+    Modern authentication frame for TriageOS.
     
     Features:
-    - Sleek dark-mode design
-    - Placeholder text in entry fields
-    - Smooth button hover effects
-    - Background thread for C++ response handling
-    
-    Usage:
-        def on_success():
-            print("Logged in!")
-        
-        app = LoginWindow(bridge, on_success)
-        app.mainloop()
+    - Centered "Card" layout (Responsive)
+    - Thread-safe C++ communication
+    - Robust cleanup handling
     """
     
     # Color scheme
     COLORS = {
-        "bg_dark": "#1a1a2e",
-        "bg_card": "#16213e",
-        "accent": "#00d4ff",
+        "bg_dark": "#1a1a2e",    # Deep Navy
+        "bg_card": "#16213e",    # Lighter Navy
+        "accent": "#00d4ff",     # Cyan
         "accent_hover": "#00a8cc",
         "text": "#ffffff",
         "text_muted": "#a0a0a0",
-        "error": "#ff4757",
-        "success": "#2ed573",
+        "error": "#ff4757",      # Red
+        "success": "#2ed573",    # Green
     }
     
-    def __init__(self, bridge: SystemBridge, on_success_callback: Callable[[], None]):
+    def __init__(self, master, bridge: SystemBridge, on_success_callback: Callable[[], None]):
         """
-        Initialize the login window.
+        Initialize the login frame.
         
         Args:
-            bridge: SystemBridge instance for C++ communication
-            on_success_callback: Function to call upon successful login
+            master: Parent window (TriageApp)
+            bridge: SystemBridge instance
+            on_success_callback: Function to run on login success
         """
-        super().__init__()
+        super().__init__(master, fg_color=self.COLORS["bg_dark"])
         
         self.bridge = bridge
         self.on_success_callback = on_success_callback
+        
+        # Thread control flags
+        self.running = True
         self.is_logged_in = False
         
-        # Window configuration
-        self.title("TRIAGE O.S. - Login")
-        self.geometry("400x500")
-        self.resizable(False, False)
-        self.configure(fg_color=self.COLORS["bg_dark"])
+        # Pack self to fill the parent window
+        self.pack(fill="both", expand=True)
         
-        # Center window on screen
-        self.update_idletasks()
-        x = (self.winfo_screenwidth() // 2) - 200
-        y = (self.winfo_screenheight() // 2) - 250
-        self.geometry(f"+{x}+{y}")
+        # Build UI
+        self._create_ui()
         
-        # Build the UI
-        self._create_widgets()
-        
-        # Start listening for C++ responses
+        # Start background listener
         self._start_listener()
         
-        # Focus the username entry
-        self.user_entry.focus()
+        # Auto-focus username field
+        self.after(100, lambda: self.user_entry.focus())
     
-    def _create_widgets(self) -> None:
-        """Create the modern login form."""
+    def _create_ui(self) -> None:
+        """Create the centered login card and widgets."""
         
-        # Main container with padding
-        container = ctk.CTkFrame(self, fg_color=self.COLORS["bg_card"], corner_radius=20)
-        container.pack(expand=True, fill="both", padx=30, pady=30)
+        # === Centered Login Card ===
+        self.card = ctk.CTkFrame(
+            self,
+            fg_color=self.COLORS["bg_card"],
+            corner_radius=20,
+            width=380,
+            height=520
+        )
+        # Perfectly center the card regardless of window size
+        self.card.place(relx=0.5, rely=0.5, anchor="center")
+        self.card.pack_propagate(False)  # Force fixed size
         
-        # === Logo/Title Section ===
-        logo_label = ctk.CTkLabel(
-            container,
+        # === Logo & Title ===
+        ctk.CTkLabel(
+            self.card,
             text="🏥",
             font=ctk.CTkFont(size=60)
-        )
-        logo_label.pack(pady=(30, 10))
+        ).pack(pady=(35, 10))
         
-        title_label = ctk.CTkLabel(
-            container,
+        ctk.CTkLabel(
+            self.card,
             text="TRIAGE O.S.",
             font=ctk.CTkFont(family="Segoe UI", size=28, weight="bold"),
             text_color=self.COLORS["accent"]
-        )
-        title_label.pack(pady=(0, 5))
+        ).pack(pady=(0, 5))
         
-        subtitle_label = ctk.CTkLabel(
-            container,
+        ctk.CTkLabel(
+            self.card,
             text="Emergency Room Management System",
             font=ctk.CTkFont(size=12),
             text_color=self.COLORS["text_muted"]
-        )
-        subtitle_label.pack(pady=(0, 30))
+        ).pack(pady=(0, 30))
         
-        # === Login Form ===
-        form_frame = ctk.CTkFrame(container, fg_color="transparent")
-        form_frame.pack(fill="x", padx=40)
+        # === Form Container ===
+        form = ctk.CTkFrame(self.card, fg_color="transparent")
+        form.pack(fill="x", padx=35)
         
-        # Username Entry
+        # Username
         self.user_entry = ctk.CTkEntry(
-            form_frame,
+            form,
             placeholder_text="Username",
             font=ctk.CTkFont(size=14),
             height=45,
@@ -129,9 +120,9 @@ class LoginWindow(ctk.CTk):
         )
         self.user_entry.pack(fill="x", pady=(0, 15))
         
-        # Password Entry
+        # Password
         self.pass_entry = ctk.CTkEntry(
-            form_frame,
+            form,
             placeholder_text="Password",
             font=ctk.CTkFont(size=14),
             height=45,
@@ -140,11 +131,11 @@ class LoginWindow(ctk.CTk):
             border_color=self.COLORS["accent"],
             show="•"
         )
-        self.pass_entry.pack(fill="x", pady=(0, 20))
+        self.pass_entry.pack(fill="x", pady=(0, 15))
         
-        # Error Label (hidden initially)
+        # Error Label
         self.error_label = ctk.CTkLabel(
-            form_frame,
+            form,
             text="",
             font=ctk.CTkFont(size=12),
             text_color=self.COLORS["error"]
@@ -153,7 +144,7 @@ class LoginWindow(ctk.CTk):
         
         # Login Button
         self.login_btn = ctk.CTkButton(
-            form_frame,
+            form,
             text="Login",
             font=ctk.CTkFont(size=16, weight="bold"),
             height=50,
@@ -162,104 +153,88 @@ class LoginWindow(ctk.CTk):
             hover_color=self.COLORS["accent_hover"],
             command=self._attempt_login
         )
-        self.login_btn.pack(fill="x", pady=(10, 0))
+        self.login_btn.pack(fill="x", pady=(5, 0))
         
-        # === Footer ===
-        footer_label = ctk.CTkLabel(
-            container,
+        # Footer
+        ctk.CTkLabel(
+            self.card,
             text="Secure Medical Triage Platform",
             font=ctk.CTkFont(size=10),
             text_color=self.COLORS["text_muted"]
-        )
-        footer_label.pack(side="bottom", pady=20)
+        ).pack(side="bottom", pady=25)
         
-        # Bind Enter key to login
-        self.bind("<Return>", lambda e: self._attempt_login())
+        # === Event Bindings ===
+        # Bind Enter key specifically to fields (Safe)
+        self.user_entry.bind("<Return>", lambda e: self._attempt_login())
+        self.pass_entry.bind("<Return>", lambda e: self._attempt_login())
     
     def _attempt_login(self) -> None:
-        """Attempt to login with the entered credentials."""
-        username = self.user_entry.get().strip()
-        password = self.pass_entry.get().strip()
+        """Validate input and send login command."""
+        user = self.user_entry.get().strip()
+        pwd = self.pass_entry.get().strip()
         
-        # Validate input
-        if not username:
+        if not user:
             self._show_error("Please enter a username")
             self.user_entry.focus()
             return
-        
-        if not password:
+        if not pwd:
             self._show_error("Please enter a password")
             self.pass_entry.focus()
             return
-        
-        # Disable button during login attempt
+            
         self.login_btn.configure(state="disabled", text="Authenticating...")
         self._clear_error()
         
-        # Send login command to C++ backend
-        if not self.bridge.send_command(f"LOGIN {username} {password}"):
-            self._show_error("Failed to connect to backend")
+        # Send to C++ Backend
+        if not self.bridge.send_command(f"LOGIN {user} {pwd}"):
+            self._show_error("Backend Connection Failed")
             self.login_btn.configure(state="normal", text="Login")
-    
+
     def _start_listener(self) -> None:
-        """Start a background thread to listen for C++ responses."""
-        
+        """Start thread to listen for C++ login response."""
         def listen():
-            while not self.is_logged_in:
+            while self.running and not self.is_logged_in:
                 try:
-                    # Check if window still exists
+                    # If frame destroyed, stop listening
                     if not self.winfo_exists():
                         break
-                except Exception:
-                    break
-                
-                try:
+                        
                     line = self.bridge.read_line()
-                    
-                    if line is None:
+                    if not line:
                         continue
-                    
+                        
                     if line == "SUCCESS_LOGIN":
                         self.is_logged_in = True
-                        try:
-                            self.after(0, self._on_login_success)
-                        except Exception:
-                            pass
+                        self.after(0, self._on_login_success)
                         break
-                        
                     elif line == "ERROR_LOGIN":
-                        try:
-                            if self.winfo_exists():
-                                self.after(0, self._on_login_failed)
-                        except Exception:
-                            pass
+                        self.after(0, self._on_login_failed)
+                        
                 except Exception:
                     break
-        
-        thread = threading.Thread(target=listen, daemon=True)
-        thread.start()
+                    
+        threading.Thread(target=listen, daemon=True).start()
     
     def _on_login_success(self) -> None:
-        """Handle successful login - transition to dashboard."""
-        print("[Login] Authentication successful")
-        
-        # Destroy the login window
-        self.destroy()
-        
-        # Call the success callback to launch dashboard
+        """Trigger transition to Dashboard."""
         self.on_success_callback()
     
     def _on_login_failed(self) -> None:
-        """Handle failed login attempt."""
-        self._show_error("Invalid username or password")
+        """Reset UI on failure."""
+        self._show_error("Invalid Credentials")
         self.login_btn.configure(state="normal", text="Login")
         self.pass_entry.delete(0, "end")
         self.pass_entry.focus()
     
-    def _show_error(self, message: str) -> None:
-        """Display an error message."""
-        self.error_label.configure(text=f"⚠️ {message}")
-    
+    def _show_error(self, msg: str) -> None:
+        self.error_label.configure(text=f"⚠️ {msg}")
+        
     def _clear_error(self) -> None:
-        """Clear the error message."""
         self.error_label.configure(text="")
+        
+    def cleanup(self) -> None:
+        """
+        Robust cleanup method called by main.py before switching views.
+        Stops threads ensures no hanging processes.
+        """
+        self.running = False

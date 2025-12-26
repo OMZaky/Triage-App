@@ -1,7 +1,11 @@
 """
-TriageOS - Main Entry Point (CustomTkinter)
-Launches the Emergency Room Triage Management System.
-Supports Login -> Dashboard -> Logout -> Login cycle.
+TriageOS - Main Entry Point (Robust Architecture)
+The application root window that manages view switching (Login <-> Dashboard).
+
+ARCHITECTURE:
+    TriageApp (CTk) - The one and only window
+        ├── LoginFrame (CTkFrame) - Swapped in for login
+        └── DashboardFrame (CTkFrame) - Swapped in after login
 """
 
 import customtkinter as ctk
@@ -14,9 +18,11 @@ ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
 # Import our modules
+# NOTE: Ensure login_window.py has 'class LoginFrame(ctk.CTkFrame)'
+# NOTE: Ensure dashboard.py has 'class DashboardFrame(ctk.CTkFrame)'
 from bridge import SystemBridge
-from login_window import LoginWindow
-from dashboard import ERDashboard
+from login_window import LoginFrame
+from dashboard import DashboardFrame
 
 
 def find_backend_executable() -> str | None:
@@ -43,23 +49,113 @@ def find_backend_executable() -> str | None:
     return None
 
 
-def main():
+class TriageApp(ctk.CTk):
     """
-    Main entry point for the TriageOS application.
+    The single root window for TriageOS.
+    Manages switching between Login and Dashboard frames.
+    """
     
-    Flow (with logout support):
-    1. Find and start the C++ backend
-    2. LOOP:
-       a. Show LoginWindow
-       b. If login fails/closes -> break loop, exit
-       c. If login succeeds -> launch Dashboard
-       d. If logout clicked -> continue loop (back to login)
-       e. If dashboard closed normally -> break loop, exit
-    3. Cleanup and exit
-    """
+    def __init__(self, bridge: SystemBridge):
+        super().__init__()
+        
+        self.bridge = bridge
+        self.current_frame = None
+        
+        # Window configuration
+        self.title("TRIAGE O.S. - Emergency Room Management")
+        self.geometry("1400x850")
+        self.minsize(1000, 700)
+        self.configure(fg_color="#1a1a2e") # Dark Navy Background
+        
+        # Center window on screen
+        self.update_idletasks()
+        x = (self.winfo_screenwidth() // 2) - 700
+        y = (self.winfo_screenheight() // 2) - 425
+        self.geometry(f"+{x}+{y}")
+        
+        # Handle window close (X button)
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        
+        # Start with login screen
+        self.show_login()
+    
+    def _clear_current_frame(self) -> None:
+        """
+        Remove the current frame from the window.
+        CRITICAL: Calls cleanup() if the frame has it to stop threads/sounds.
+        """
+        if self.current_frame is not None:
+            # Call cleanup if available (DashboardFrame has it)
+            if hasattr(self.current_frame, 'cleanup'):
+                try:
+                    self.current_frame.cleanup()
+                except Exception:
+                    pass
+            
+            # Destroy the frame
+            try:
+                self.current_frame.destroy()
+            except Exception:
+                pass
+            
+            self.current_frame = None
+    
+    def show_login(self) -> None:
+        """Show the login frame."""
+        self._clear_current_frame()
+        
+        # Instantiate LoginFrame (Pass 'self' as master)
+        self.current_frame = LoginFrame(
+            master=self,
+            bridge=self.bridge,
+            on_success_callback=self.show_dashboard
+        )
+        self.current_frame.pack(fill="both", expand=True)
+    
+    def show_dashboard(self) -> None:
+        """Show the dashboard frame."""
+        self._clear_current_frame()
+        
+        # Instantiate DashboardFrame (Pass 'self' as master)
+        self.current_frame = DashboardFrame(
+            master=self,
+            bridge=self.bridge,
+            on_logout_callback=self.logout_handler
+        )
+        self.current_frame.pack(fill="both", expand=True)
+    
+    def logout_handler(self) -> None:
+        """Handle logout - cleanup dashboard and show login."""
+        # Mark as logging out so bridge stays open
+        if hasattr(self.current_frame, 'is_logging_out'):
+            self.current_frame.is_logging_out = True
+        
+        self.show_login()
+    
+    def _on_close(self) -> None:
+        """
+        Handle window close (X button).
+        CRITICAL: Must cleanup current frame before destroying window.
+        """
+        # Cleanup current frame (stops threads, alarm, etc.)
+        self._clear_current_frame()
+        
+        # Close the bridge
+        try:
+            if self.bridge:
+                self.bridge.close()
+        except Exception:
+            pass
+        
+        # Destroy the window and exit
+        self.destroy()
+        sys.exit(0)
+
+
+def main():
+    """Main entry point."""
     print("=" * 50)
     print("  TRIAGE O.S. - Emergency Room Management")
-    print("  CustomTkinter Modern UI Edition")
     print("=" * 50)
     
     # Step 1: Find the backend executable
@@ -70,9 +166,7 @@ def main():
         root.withdraw()
         messagebox.showerror(
             "Backend Not Found",
-            "Could not find 'triage.exe'.\n\n"
-            "Please compile the C++ backend first:\n"
-            "g++ src/*.cpp -o triage.exe"
+            "Could not find 'triage.exe'.\n\nPlease compile the C++ backend first."
         )
         root.destroy()
         sys.exit(1)
@@ -87,57 +181,17 @@ def main():
         root.withdraw()
         messagebox.showerror(
             "Startup Error",
-            "Failed to start the C++ backend.\n"
-            "Check the console for error details."
+            "Failed to start the C++ backend.\nCheck the console for error details."
         )
         root.destroy()
         sys.exit(1)
     
     print("[Main] C++ backend started successfully")
     
-    # Step 3: Main application loop (Login -> Dashboard -> Logout -> Login)
-    while True:
-        # Track login and logout state
-        login_successful = False
-        user_logged_out = False
-        
-        def on_login_success():
-            """Called when login succeeds."""
-            nonlocal login_successful
-            login_successful = True
-        
-        # Show login window
-        print("[Main] Showing login window...")
-        login = LoginWindow(bridge, on_login_success)
-        login.mainloop()
-        
-        # Check if login was successful
-        if not login_successful:
-            print("[Main] Login cancelled or failed, exiting...")
-            break
-        
-        # Define logout callback
-        def on_logout():
-            """Called when user clicks Logout in dashboard."""
-            nonlocal user_logged_out
-            user_logged_out = True
-            print("[Main] User logged out")
-        
-        # Launch dashboard
-        print("[Main] Launching dashboard...")
-        dashboard = ERDashboard(bridge, on_logout_callback=on_logout)
-        dashboard.mainloop()
-        
-        # Check if user logged out (continue loop) or closed normally (exit)
-        if user_logged_out:
-            print("[Main] Returning to login screen...")
-            continue
-        else:
-            print("[Main] Dashboard closed, exiting...")
-            break
+    # Step 3: Run the application
+    app = TriageApp(bridge)
+    app.mainloop()
     
-    # Step 4: Cleanup
-    bridge.close()
     print("[Main] Application closed")
 
 
