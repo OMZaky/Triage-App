@@ -1,48 +1,93 @@
 #include "FibHeap.h"
 #include <iostream>
-#include <cmath> // Needed for log2 in consolidate
+#include <cmath> 
 #include <fstream>
 
-// ASSIGNED TO: MEMBERS 2, 3, 4
+// ==========================================
+// 1. CUSTOM VECTOR STRUCT (Replaces std::vector)
+// ==========================================
+struct NodeVector {
+    Node** data;
+    int capacity;
+    int size;
+
+    NodeVector(int initCap = 20) {
+        capacity = initCap;
+        size = 0;
+        data = new Node*[capacity];
+    }
+
+    ~NodeVector() {
+        delete[] data;
+    }
+
+    void push_back(Node* val) {
+        if (size == capacity) {
+            // Resize: Double the capacity
+            int newCap = capacity * 2;
+            Node** newData = new Node*[newCap];
+            for (int i = 0; i < size; i++) {
+                newData[i] = data[i];
+            }
+            delete[] data;
+            data = newData;
+            capacity = newCap;
+        }
+        data[size] = val;
+        size++;
+    }
+
+    Node* operator[](int index) {
+        if (index < 0 || index >= size) return nullptr;
+        return data[index];
+    }
+    
+    int length() { return size; }
+};
+
+// ==========================================
+// 2. FIBONACCI HEAP IMPLEMENTATION
+// ==========================================
 
 FibonacciHeap::FibonacciHeap() {
     minNode = nullptr;
     numNodes = 0;
+    
+    // FIXED: Manually initialize array (Maps do this auto, Arrays don't)
+    for (int i = 0; i < MAX_PID; i++) {
+        nodeLookup[i] = nullptr;
+    }
 }
 
 FibonacciHeap::~FibonacciHeap() {
-    // TODO: Member 2 needs to implement recursive cleanup here
-    // For now, we leave it empty to prevent compile errors
+    // OS cleans up memory on exit. 
 }
 
 void FibonacciHeap::insert(int id, int priority, int age, std::string name, std::string desc) {
+    // Safety check for Array bounds
+    if (id < 0 || id >= MAX_PID) {
+        cout << "Error: ID out of bounds (0-" << MAX_PID-1 << ")" << endl;
+        return;
+    }
 
-
-
-Node* newNode = new Node(id, priority, age, name, desc);    
+    Node* newNode = new Node(id, priority, age, name, desc);    
 
     if (minNode == nullptr) {
         minNode = newNode;
-        // Circular links logic handles itself in Node constructor usually, 
-        // but let's ensure safety:
         minNode->left = minNode;
         minNode->right = minNode;
     } else {
-        // Add to the root list (Member 1's addSibling logic)
         minNode->addSibling(newNode);
-        
-        // Update min if necessary
         if (newNode->priority < minNode->priority) {
             minNode = newNode;
         }
     }
 
+    // FIXED: Direct Array Assignment (No .insert)
     nodeLookup[id] = newNode;
-
     numNodes++;
 }
 
-// THIS WAS MISSING
 Node* FibonacciHeap::peek() {
     return minNode;
 }
@@ -50,30 +95,27 @@ Node* FibonacciHeap::peek() {
 Node* FibonacciHeap::extractMin() {
     Node* z = minNode;
     if (z != nullptr) {
-        // 1. Promote children to root list
         if (z->child != nullptr) {
             Node* child = z->child;
             Node* start = child;
-            // Iterate all children
             do {
                 Node* nextChild = child->right;
-                minNode->addSibling(child); // Move child to root list
+                minNode->addSibling(child); 
                 child->parent = nullptr;
                 child = nextChild;
             } while (child != start);
         }
 
-        nodeLookup.erase(minNode->id);
+        // FIXED: Array Erasure (No .erase)
+        nodeLookup[z->id] = nullptr;
 
-        // 2. Remove z from root list
         z->removeSelf();
 
         if (z == z->right) {
-            // It was the only node
             minNode = nullptr;
         } else {
             minNode = z->right;
-            consolidate(); // Re-balance the heap
+            consolidate();
         }
         numNodes--;
     }
@@ -81,41 +123,38 @@ Node* FibonacciHeap::extractMin() {
 }
 
 void FibonacciHeap::link(Node* y, Node* x) {
-    // Remove y from root list
     y->removeSelf();
-    
-    // Make y a child of x
-    x->addChild(y); // Ensure Node.cpp has addChild
-    
+    x->addChild(y); 
     y->marked = false;
 }
 
 void FibonacciHeap::consolidate() {
     float phi = (1 + sqrt(5)) / 2;
-    int maxDegree = (int)(log(numNodes) / log(phi)) + 1; // Approx max degree
+    int maxDegree = (int)(log(numNodes) / log(phi)) + 1; 
     
-    // Use vector instead of raw array for safety
-    std::vector<Node*> A(maxDegree + 5, nullptr);
+    // FIXED: Use raw dynamic array instead of std::vector
+    int arraySize = maxDegree + 10; // Buffer
+    Node** A = new Node*[arraySize];
+    for(int i = 0; i < arraySize; i++) A[i] = nullptr;
 
-    // 1. We must iterate over the root list. 
-    // Since the list changes as we link, we collect nodes into a static list first.
-    std::vector<Node*> rootNodes;
-    Node* x = minNode;
-    if (x) {
+    // FIXED: Use custom NodeVector instead of std::vector
+    NodeVector rootNodes;
+    Node* start = minNode;
+    if (start) {
         do {
-            rootNodes.push_back(x);
-            x = x->right;
-        } while (x != minNode && x != nullptr);
+            rootNodes.push_back(start);
+            start = start->right;
+        } while (start != minNode);
     }
 
-    // 2. Process every node in root list
-    for (Node* w : rootNodes) {
-        x = w;
+    // Process Nodes
+    for (int i = 0; i < rootNodes.length(); i++) {
+        Node* w = rootNodes[i];
+        Node* x = w;
         int d = x->degree;
         
         while (A[d] != nullptr) {
             Node* y = A[d];
-            // Swap so x is always the smaller priority (parent)
             if (x->priority > y->priority) {
                 Node* temp = x;
                 x = y;
@@ -128,48 +167,42 @@ void FibonacciHeap::consolidate() {
         A[d] = x;
     }
 
-    // 3. Reconstruct Root List from Array A
+    // Reconstruct
     minNode = nullptr;
-    for (Node* node : A) {
-        if (node != nullptr) {
+    for (int i = 0; i < arraySize; i++) {
+        if (A[i] != nullptr) {
             if (minNode == nullptr) {
-                minNode = node;
+                minNode = A[i];
                 minNode->left = minNode;
                 minNode->right = minNode;
             } else {
-                minNode->addSibling(node);
-                if (node->priority < minNode->priority) {
-                    minNode = node;
+                minNode->addSibling(A[i]);
+                if (A[i]->priority < minNode->priority) {
+                    minNode = A[i];
                 }
             }
         }
     }
+    delete[] A; // Clean up manual array
 }
 
 void FibonacciHeap::decreaseKey(Node* node, int newPriority) {
     node->priority = newPriority;
     Node* parent = node->parent;
 
-    // If heap property is violated (child is now more urgent than parent)
     if (parent != nullptr && node->priority < parent->priority) {
         cut(node, parent);
         cascadingCut(parent);
     }
 
-    // Update global min if needed
     if (node->priority < minNode->priority) {
         minNode = node;
     }
 }
 
 void FibonacciHeap::cut(Node* node, Node* parent) {
-    // 1. Remove node from parent's child list
-    parent->removeChild(node); // You need to ensure Node.cpp has this, or implement manual pointer logic here
-    
-    // 2. Add node to root list
+    parent->removeChild(node);
     minNode->addSibling(node);
-    
-    // 3. Clear parent pointer and mark
     node->parent = nullptr;
     node->marked = false;
 }
@@ -186,7 +219,67 @@ void FibonacciHeap::cascadingCut(Node* node) {
     }
 }
 
-// Recursion helpers for File I/O
+// FIXED: Use Array Bounds Check (No .find)
+void FibonacciHeap::updatePriority(int id, int newPriority) {
+    if (id < 0 || id >= MAX_PID || nodeLookup[id] == nullptr) {
+        cout << "Error: Patient ID " << id << " not found." << endl;
+        return;
+    }
+
+    Node* target = nodeLookup[id];
+    
+    if (newPriority > target->priority) {
+        cout << "Error: Cannot increase priority directly." << endl;
+        return; 
+    }
+
+    decreaseKey(target, newPriority);
+}
+
+// FIXED: Use Array Bounds Check
+void FibonacciHeap::removePatient(int id) {
+    if (id < 0 || id >= MAX_PID || nodeLookup[id] == nullptr) return;
+
+    updatePriority(id, -9999); 
+    extractMin(); 
+}
+
+void FibonacciHeap::merge(FibonacciHeap& other) {
+    if (other.minNode == nullptr) return;
+
+    if (minNode == nullptr) {
+        minNode = other.minNode;
+        numNodes = other.numNodes;
+    } else {
+        Node* myRight = minNode->right;
+        Node* otherLeft = other.minNode->left;
+
+        minNode->right = other.minNode;
+        other.minNode->left = minNode;
+
+        myRight->left = otherLeft;
+        otherLeft->right = myRight;
+
+        if (other.minNode->priority < minNode->priority) {
+            minNode = other.minNode;
+        }
+        numNodes += other.numNodes;
+    }
+
+    // FIXED: Iterate Array Indices (No Map Iterator)
+    for (int i = 0; i < MAX_PID; i++) {
+        if (other.nodeLookup[i] != nullptr) {
+            nodeLookup[i] = other.nodeLookup[i];
+        }
+    }
+
+    // Reset other
+    other.minNode = nullptr;
+    other.numNodes = 0;
+    // Clear other's lookup
+    for(int i=0; i < MAX_PID; i++) other.nodeLookup[i] = nullptr;
+}
+
 void FibonacciHeap::saveToFile(std::string filename) {
     std::ofstream file(filename);
     if (!file.is_open()) return;
@@ -203,7 +296,6 @@ void FibonacciHeap::saveToFile(std::string filename) {
 }
 
 void FibonacciHeap::_saveRecursive(Node* node, std::ofstream& file) {
-    
     if (node == nullptr) return;
 
     file << node->id << " " 
@@ -221,79 +313,6 @@ void FibonacciHeap::_saveRecursive(Node* node, std::ofstream& file) {
         } while (current != start);
     }
 }
-
-// Merges 'other' heap into 'this' heap
-void FibonacciHeap::merge(FibonacciHeap& other) {
-    if (other.minNode == nullptr) return; // Other is empty
-
-    if (minNode == nullptr) {
-        // If we are empty, just steal their minNode
-        minNode = other.minNode;
-        numNodes = other.numNodes;
-    } else {
-        // 1. SPLICE the two circular linked lists together
-        // Connect this->min->right to other->min->left
-        Node* myRight = minNode->right;
-        Node* otherLeft = other.minNode->left;
-
-        minNode->right = other.minNode;
-        other.minNode->left = minNode;
-
-        myRight->left = otherLeft;
-        otherLeft->right = myRight;
-
-        // 2. Update Min Pointer if necessary
-        if (other.minNode->priority < minNode->priority) {
-            minNode = other.minNode;
-        }
-        
-        // 3. Combine counts
-        numNodes += other.numNodes;
-    }
-
-    // 4. Merge the lookup maps (so we can still find the new patients)
-    // Note: This part is O(M) where M is the other heap size, but unavoidable if we want lookups.
-    for (auto const& [id, node] : other.nodeLookup) {
-        nodeLookup[id] = node;
-    }
-
-    // 5. Clear the other heap so it doesn't delete nodes when it dies
-    other.minNode = nullptr;
-    other.numNodes = 0;
-    other.nodeLookup.clear();
-}
-
-// SAFETY WRAPPER: Checks if ID exists before trying to change it
-void FibonacciHeap::updatePriority(int id, int newPriority) {
-    if (nodeLookup.find(id) == nodeLookup.end()) {
-        std::cout << "Error: Patient ID " << id << " not found." << std::endl;
-        return;
-    }
-
-    Node* target = nodeLookup[id];
-    
-    // Standard Fibonacci limitation: You can usually only DECREASE (make more urgent).
-    // If you need to INCREASE (make less urgent), the standard way is to 
-    // delete and re-insert, but for this project, let's just focus on decrease.
-    if (newPriority > target->priority) {
-        std::cout << "Error: Cannot increase priority directly." << std::endl;
-        return; 
-    }
-
-    decreaseKey(target, newPriority);
-}
-
-void FibonacciHeap::removePatient(int id) {
-    if (nodeLookup.find(id) == nodeLookup.end()) return;
-
-    // Step 1: Force them to be the most critical patient instantly
-    // We use a reserved value like -9999 or simply min_int
-    updatePriority(id, -9999); 
-
-    // Step 2: Now they are at the root (minNode), so just extract them
-    extractMin(); 
-}
-
 
 int FibonacciHeap::getNumNodes() {
     return numNodes;

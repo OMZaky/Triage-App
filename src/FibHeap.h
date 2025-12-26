@@ -1,43 +1,52 @@
 #ifndef FIBHEAP_H
 #define FIBHEAP_H
-#include "Node.h"
-#include <unordered_map>
 
+#include <iostream>
+#include <cmath>
+#include <string>
+#include <fstream>
+#include "Node.h"
+
+using namespace std;
+
+// Maximum Patient ID allowed. 
+const int MAX_PID = 10001; 
 
 class FibonacciHeap {
 private:
-    Node* minNode; // Pointer to the highest priority task
+    Node* minNode;
     int numNodes;
-
-    std::unordered_map<int, Node*> nodeLookup; // THE MAP
     
-    Node* findNode(Node* start, int id);
+    // REPLACEMENT FOR MAP: A raw array of pointers
+    // Index = Patient ID, Value = Pointer to Node
+    Node* nodeLookup[MAX_PID]; 
 
-
-    void consolidate(); 
+    // Internal Helpers
     void cut(Node* node, Node* parent);
     void cascadingCut(Node* node);
     void link(Node* y, Node* x);
     void decreaseKey(Node* node, int newPriority); 
-    void _saveRecursive(Node* node, std::ofstream& file);
-
+    void _saveRecursive(Node* node, ofstream& file);
+    
+    // MISSING FUNCTION ADDED HERE:
+    void consolidate(); 
 
 public:
     FibonacciHeap();
-    ~FibonacciHeap(); 
+    ~FibonacciHeap();
 
-    int getNumNodes();
-
-
-    Node* peek(); 
+    // Main Functions
+    void insert(int id, int priority, int age, string name, string desc);
+    Node* peek();
     Node* extractMin();
     
-    void insert(int id, int priority, int age, std::string name, std::string desc);    
-    void merge(FibonacciHeap& other);
-    void removePatient(int id);
-    void updatePriority(int id, int newPriority);
-    void decreaseKey(int id, int newPriority);
-    void saveToFile(std::string filename);
+    // Advanced Features
+    void updatePriority(int id, int newPriority); 
+    void removePatient(int id);                   
+    void merge(FibonacciHeap& other);             
+    
+    int getNumNodes();
+    void saveToFile(string filename);
 };
 
 #endif
