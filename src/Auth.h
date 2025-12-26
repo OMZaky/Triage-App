@@ -2,20 +2,32 @@
 #define AUTH_H
 
 #include <string>
+#include <iostream>
+#include <fstream>
 
-// ASSIGNED TO: MEMBER 1
-class Auth {
+// A constant specific to the custom hash function
+const unsigned long HASH_SEED = 5381; 
+
+struct User {
+    std::string username;
+    unsigned long passwordHash; // We store the hash, not the text
+};
+
+class AuthSystem {
 private:
-    long long simpleHash(std::string pass); // Custom hash function
-    void saveHash(long long hash);
-    long long loadHash();
+    std::string dbFilename;
+    
+    // Custom deterministic hash function (DJB2 Algorithm)
+    // We use this because std::hash can change between program runs.
+    unsigned long computeHash(std::string str);
 
 public:
-    // Returns true if password matches stored hash
-    bool login(std::string inputPass);
+    AuthSystem(std::string filename = "users_db.txt");
     
-    // Updates the stored hash
-    void changePassword(std::string newPass);
+    // Core Logic
+    bool login(std::string username, std::string password);
+    bool changePassword(std::string username, std::string oldPass, std::string newPass);
+    void ensureAdminExists(); // Creates default admin if file missing
 };
 
 #endif

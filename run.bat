@@ -15,7 +15,7 @@ if not exist "src" (
 
 :: 2. Compile
 cd src
-g++ *.cpp -o ../app.exe
+g++ *.cpp -o ../triage.exe
 if %errorlevel% neq 0 (
     echo.
     echo [ERROR] Compilation Failed! Please fix the C++ errors above.

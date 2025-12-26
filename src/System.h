@@ -9,7 +9,7 @@
 class System {
 private:
     FibonacciHeap heap;
-    Auth auth;
+    AuthSystem auth;
     bool isLoggedIn;
     int nextId;
 

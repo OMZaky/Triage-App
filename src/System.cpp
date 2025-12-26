@@ -7,8 +7,7 @@
 
 System::System() {
     isLoggedIn = false;
-
-    nextId = 1; // Default start ID
+    nextId = 1; 
 
     // --- PERSISTENCE: LOAD DATA ON STARTUP ---
     // We try to open the database file. If it exists, we rebuild the heap.
@@ -17,18 +16,17 @@ System::System() {
         int id, prio, age;
         std::string name, desc;
         
-        // Read line by line: [ID] [PRIORITY] [NAME]
-        // Note: This assumes names don't have spaces for simplicity. 
-        // If names have spaces, we'd need std::getline.
+        // Read line by line: [ID] [PRIORITY] [AGE] [NAME] [DESC]
+        // Note: For simplicity, we assume single-word names/desc or handle formatting in save.
         while (file >> id >> prio >> age >> name >> desc) {
             heap.insert(id, prio, age, name, desc);
 
+            // Ensure our auto-increment ID is always higher than the highest loaded ID
             if (id >= nextId) {
                 nextId = id + 1;
             }
         }
         file.close();
-        // We don't print anything here to avoid confusing the Python GUI during startup
     }
 }
 
@@ -39,12 +37,13 @@ void System::run() {
     // Waits for text commands from Python via Standard Input (std::cin)
     while (std::cin >> command) {
         
-        // 1. LOGIN COMMAND (Always allowed)
+        // 1. LOGIN COMMAND (Public)
+        // Format: LOGIN <username> <password>
         if (command == "LOGIN") {
-            std::string pass;
-            std::cin >> pass;
+            std::string user, pass;
+            std::cin >> user >> pass;
             
-            if (auth.login(pass)) {
+            if (auth.login(user, pass)) {
                 isLoggedIn = true;
                 std::cout << "SUCCESS_LOGIN" << std::endl;
             } else {
@@ -52,31 +51,42 @@ void System::run() {
             }
         }
         
-        // 2. EXIT COMMAND (Always allowed)
-        // Triggers the Save functionality
+        // 2. CHANGE PASSWORD (Public)
+        // Format: CHANGE_PASS <username> <old_pass> <new_pass>
+        else if (command == "CHANGE_PASS") {
+            std::string user, oldPass, newPass;
+            std::cin >> user >> oldPass >> newPass;
+            
+            if (auth.changePassword(user, oldPass, newPass)) {
+                std::cout << "SUCCESS_PASS_CHANGE" << std::endl;
+            } else {
+                std::cout << "ERROR_PASS_CHANGE" << std::endl;
+            }
+        }
+
+        // 3. EXIT COMMAND (Always allowed)
         else if (command == "EXIT") {
             heap.saveToFile("patients_data.txt");
             std::cout << "SUCCESS_EXIT" << std::endl;
             break; // Terminate the C++ backend
         }
         
-        // 3. PING (Heartbeat check)
+        // 4. PING (Heartbeat check for Python)
         else if (command == "PING") {
             std::cout << "PONG" << std::endl;
         }
 
-        // 4. RESTRICTED COMMANDS (Must be Logged In)
+        // 5. RESTRICTED COMMANDS (Must be Logged In)
         else {
             if (!isLoggedIn) {
-                // If not logged in, we must consume the arguments so the stream doesn't desync.
-                // E.g. if user sent "ADD 101 5 John", we need to eat "101 5 John"
+                // If not logged in, consume arguments to prevent stream desync.
+                // Otherwise, the next word in the buffer might be interpreted as a command.
                 std::string garbage;
                 std::getline(std::cin, garbage);
-                
                 std::cout << "ERROR_AUTH" << std::endl;
             }
             else {
-                // User is logged in, process the actual heap operations
+                // User is logged in, process the actual medical operations
                 processCommand(command);
             }
         }
@@ -88,10 +98,12 @@ void System::run() {
 
 void System::processCommand(std::string cmd) {
     
+    // --- ADD PATIENT ---
     if (cmd == "ADD") {
         int prio, age;
         std::string name, desc;
-        // Expects: ADD [ID] [PRIORITY] [NAME]
+        // Expects: ADD [PRIORITY] [AGE] [NAME] [DESC]
+        // Note: nextId is generated automatically
         std::cin >> prio >> age >> name >> desc;
 
         if (prio < 1 || prio > 10) {
@@ -102,11 +114,10 @@ void System::processCommand(std::string cmd) {
         heap.insert(nextId, prio, age, name, desc);
         std::cout << "SUCCESS_ADD " << name << " ID:" << nextId << std::endl;
         
-        nextId++; // Increment for next patient
+        nextId++; 
     }
     
-    // CRITICAL: Member 2's extractMin() returns a pointer. 
-    // We must delete it here to prevent memory leaks.
+    // --- EXTRACT (Treat Next Patient) ---
     else if (cmd == "EXTRACT") {
         Node* n = heap.extractMin();
         if (n) {
@@ -117,60 +128,85 @@ void System::processCommand(std::string cmd) {
                       << n->name << " " 
                       << n->description << std::endl;
 
-            // CRITICAL: Member 2's extractMin() returns a pointer. 
-            // We must delete it here to prevent memory leaks.
-
+            // CRITICAL: Prevent memory leak by deleting the extracted node
             delete n;
         } else {
             std::cout << "EMPTY" << std::endl;
         }
     }
     
+    // --- PEEK (View Next Patient) ---
     else if (cmd == "PEEK") {
         Node* minNode = heap.peek();
         if (minNode) {
             std::cout << "DATA " << minNode->id << " " 
                       << minNode->priority << " " 
-                      << minNode->name << std::endl;
+                      << minNode->age << " "
+                      << minNode->name << " " 
+                      << minNode->description << std::endl;
         } else {
             std::cout << "EMPTY" << std::endl;
         }
     }
 
+    // --- STATS (Dashboard Data) ---
     else if (cmd == "STATS") {
         int count = heap.getNumNodes();
-        // Estimation logic: 15 minutes per patient
+        // Estimation: 15 mins per patient
         int waitTime = count * 15; 
-        
-        // Output format: STATS COUNT:[N] WAIT:[Mins]
         std::cout << "STATS COUNT:" << count << " WAIT:" << waitTime << std::endl;
     }
 
+    // --- UPDATE PRIORITY (Dynamic Deterioration) ---
+    // Usage: When a patient's condition worsens.
     else if (cmd == "UPDATE") {
         int id, newPrio;
-        // Expects: UPDATE [ID] [NEW_PRIORITY]
         std::cin >> id >> newPrio;
         
-        // Note: decreaseKey returns void. We assume it works or prints its own error.
-        // Ideally, decreaseKey should return a bool (true=found, false=not found).
-        // For now, we assume success.
-        heap.decreaseKey(id, newPrio); 
+        // This calls our safety wrapper in FibHeap.cpp which checks the array bounds
+        heap.updatePriority(id, newPrio); 
         std::cout << "SUCCESS_UPDATE" << std::endl;
     }
 
+    // --- LEAVE (LWBS - Left Without Being Seen) ---
+    // Usage: When a patient walks out.
+    else if (cmd == "LEAVE") {
+        int id;
+        std::cin >> id;
+        heap.removePatient(id);
+        std::cout << "SUCCESS_REMOVE " << id << std::endl;
+    }
 
-    
-    else if (cmd == "CHANGE_PASS") {
-        std::string newPass;
-        std::cin >> newPass;
-        auth.changePassword(newPass);
-        std::cout << "SUCCESS_PASS_CHANGE" << std::endl;
+    // --- MERGE (Mass Casualty Event) ---
+    // Usage: Merges an external list (e.g., from an ambulance) into the main heap instantly.
+    else if (cmd == "MERGE") {
+        std::string filename;
+        std::cin >> filename;
+        
+        FibonacciHeap tempHeap;
+        std::ifstream file(filename);
+        
+        if (file.is_open()) {
+            int id, prio, age;
+            std::string name, desc;
+            while (file >> id >> prio >> age >> name >> desc) {
+                // In a real system, we would re-map IDs to avoid collisions.
+                // For this project, we assume the file contains unique IDs.
+                tempHeap.insert(id, prio, age, name, desc);
+            }
+            file.close();
+            
+            // Perform the O(1) merge operation
+            heap.merge(tempHeap);
+            std::cout << "SUCCESS_MERGE" << std::endl;
+        } else {
+            std::cout << "ERROR_FILE_NOT_FOUND" << std::endl;
+        }
     }
 
     else {
-        // Unknown command
-        std::cout << "ERROR_UNKNOWN" << std::endl;
-        // Clear line to be safe
+        std::cout << "ERROR_UNKNOWN_COMMAND" << std::endl;
+        // Clear the line to prevent infinite loops if garbage is sent
         std::string garbage; std::getline(std::cin, garbage);
     }
 }
