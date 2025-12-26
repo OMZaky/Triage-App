@@ -47,6 +47,8 @@ public:
     
     int getNumNodes();
     void saveToFile(string filename);
+    void printAll();  // List all patients for GUI sync
+
 };
 
 #endif

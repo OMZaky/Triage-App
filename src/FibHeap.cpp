@@ -283,3 +283,19 @@ void FibonacciHeap::_saveRecursive(Node* node, ofstream& file) {
 int FibonacciHeap::getNumNodes() {
     return numNodes;
 }
+
+
+void FibonacciHeap::printAll() {
+    // Iterate through nodeLookup array and print all active patients
+    for (int i = 0; i < MAX_PID; i++) {
+        if (nodeLookup[i] != nullptr) {
+            Node* node = nodeLookup[i];
+            std::cout << "LIST_DATA " << node->id << " " 
+                      << node->priority << " " 
+                      << node->age << " "
+                      << node->name << " " 
+                      << node->description << std::endl;
+        }
+    }
+    std::cout.flush();
+}

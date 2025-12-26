@@ -157,6 +157,11 @@ void System::processCommand(std::string cmd) {
         std::cout << "STATS COUNT:" << count << " WAIT:" << waitTime << std::endl;
     }
 
+    // --- LIST (Dump All Patients for GUI Sync) ---
+    else if (cmd == "LIST") {
+        heap.printAll();
+    }
+
     // --- UPDATE PRIORITY (Dynamic Deterioration) ---
     // Usage: When a patient's condition worsens.
     else if (cmd == "UPDATE") {
