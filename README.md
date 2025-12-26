@@ -1,20 +1,48 @@
-TriageOS: Critical Care Patient Flow SystemTriageOS is a hybrid medical software solution designed to optimize Emergency Room (ER) throughput. It combines a high-performance C++ Backend (handling complex priority logic via a Fibonacci Heap) with a modern Python/Tkinter Frontend (providing real-time vitals monitoring and visualization).This system solves the "Bottleneck Problem" in hospitals by ensuring that patients with the most critical conditions (Priority 1) are treated first, even as new patients arrive or existing patients deteriorate.🚀 Key Features🏥 Medical FunctionalitiesSmart Triage Queue: Automatically sorts patients based on severity (1=Critical to 10=Non-Urgent).Dynamic Deterioration: Instantly updates a patient's priority if their vitals crash (e.g., changing from Priority 4 to Priority 1).Mass Casualty Protocol: Instantly merges a secondary list of patients (e.g., from an incoming ambulance convoy) into the main queue without system lag.Live Vitals Monitor: Visualizes Heart Rate (BPM), Blood Pressure (BP), and Oxygen Saturation (SpO2) with a real-time animated EKG graph.LWBS Tracking: Efficiently removes patients who "Leave Without Being Seen" to maintain queue accuracy.⚙️ Technical EngineeringFibonacci Heap Architecture: Utilizes the advanced Fibonacci Heap data structure to achieve $O(1)$ (constant time) performance for inserting patients and updating priorities.No-STL Implementation: Built strictly using Raw C++ Arrays and manual memory management. No std::vector or std::map was used, demonstrating low-level optimization.Secure Authentication: Features a salted SHA-256 style hashing algorithm (DJB2) to secure user credentials.Hybrid Bridge: Uses a custom subprocess pipeline to allow Python to visualize C++ memory operations in real-time.📂 Project StructurePlaintextTriageOS/
+# 🏥 TriageOS: Critical Care Patient Flow System
+
+![C++](https://img.shields.io/badge/Backend-C++17-blue.svg)
+![Python](https://img.shields.io/badge/Frontend-Python%20Tkinter-yellow.svg)
+![Algorithm](https://img.shields.io/badge/Data%20Structure-Fibonacci%20Heap-red.svg)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
+
+**TriageOS** is a high-performance hybrid medical software solution designed to optimize Emergency Room (ER) throughput. It combines a raw **C++ Backend** (for $O(1)$ priority logic) with a modern **Python Dashboard** (for real-time vitals monitoring).
+
+> **The Problem:** Hospital "bottlenecks" occur when critical patients are stuck behind less urgent cases.  
+> **The Solution:** A mathematically optimal queuing system that instantly re-prioritizes patients based on live vitals.
+
+---
+
+## 🚀 Key Features
+
+### 🏥 Medical Functionalities
+* **Smart Triage Queue:** Automatically sorts patients based on severity (1=Critical, 10=Non-Urgent).
+* **Dynamic Deterioration:** Instantly updates a patient's priority if their vitals crash (e.g., changing from Prio 4 to Prio 1).
+* **Mass Casualty Protocol:** Instantly merges a secondary list (e.g., ambulance convoy) into the main queue without lag.
+* **Live Vitals Monitor:** Visualizes Heart Rate (BPM), BP, and SpO2 with a real-time animated EKG graph.
+* **LWBS Tracking:** Efficiently removes patients who "Leave Without Being Seen" to maintain queue accuracy.
+
+### ⚙️ Technical Engineering
+* **Fibonacci Heap Architecture:** Utilizes the advanced Fibonacci Heap data structure to achieve **$O(1)$** performance for critical operations.
+* **No-STL Implementation:** Built strictly using **Raw C++ Arrays** and manual memory management (No `std::vector` or `std::map`).
+* **Secure Authentication:** Implements a salted SHA-256 style hashing algorithm (DJB2) for secure login.
+* **Hybrid Bridge:** Uses a custom `subprocess` pipeline to bridge Python visualization with C++ memory operations.
+
+---
+
+## 📂 Project Structure
+
+```text
+TriageOS/
 ├── src/                    # C++ Backend Source Code
 │   ├── Auth.cpp            # Security & Hashing Logic
-│   ├── Auth.h
-│   ├── FibHeap.cpp         # The Core Fibonacci Heap & Custom Arrays
-│   ├── FibHeap.h
-│   ├── Node.cpp            # Patient Node Logic (Circular Linked Lists)
-│   ├── Node.h
-│   ├── System.cpp          # Command Processor & File I/O
-│   ├── System.h
+│   ├── FibHeap.cpp         # Core Fibonacci Heap & Custom Arrays
+│   ├── Node.cpp            # Patient Node (Circular Linked Lists)
+│   ├── System.cpp          # Command Processor
 │   └── main.cpp            # Entry Point
 │
 ├── medical_gui.py          # Python Frontend (The Dashboard)
 ├── users_db.txt            # Encrypted User Credentials
 ├── patients_data.txt       # Patient Persistence File
 └── README.md               # Documentation
-🛠️ Installation & SetupPrerequisitesC++ Compiler: g++ (MinGW for Windows, Clang for Mac, or GCC for Linux).Python: Version 3.6 or higher.Python Libraries: tkinter (usually included with Python).Step 1: Compile the BackendThe Python interface cannot run without the C++ engine. Open your terminal in the project folder and run:Windows:Bashg++ src/*.cpp -o triage.exe
-Mac / Linux:Bashg++ src/*.cpp -o triage
-Step 2: Run the ApplicationExecute the Python script. It will automatically detect and launch the compiled C++ executable in the background.Bashpython medical_gui.py
-📖 User Manual1. Secure LoginDefault Username: adminDefault Password: adminChange Password: Users can update credentials securely via the login screen. Old passwords are verified against the hash before changes are saved.2. The DashboardSidebar (The Queue): A scrollable list of all active patients.Red Cards: Critical (Priority 1).Blue Cards: Stable (Priority 2-10).Monitor (Main Screen): Click any patient in the sidebar to view their live EKG and vitals.Admit Patient: Click + ADMIT NEW PATIENT to add someone to the queue.Discharge/Treat: Click DISCHARGE / TREAT to remove the highest priority patient from the system (they are now "seen" by a doctor).Update Condition: If a patient worsens, select them and click ! UPDATE CONDITION. Changing priority to 1 will instantly move them to the top of the list and turn their status Red.🧠 Data Structure LogicWhy Fibonacci Heap?We chose a Fibonacci Heap over a standard Binary Heap because of its theoretical superiority for our specific use cases:OperationBinary HeapFibonacci Heap (TriageOS)Why it matters?Insert Patient$O(\log n)$$O(1)$Instant admission during surges.Update Condition$O(\log n)$$O(1)$Critical for patients crashing fast.Merge Ambulance$O(n)$$O(1)$Essential for Mass Casualty Events.Extract Max$O(\log n)$$O(\log n)$Doctor pulls next patient efficiently.The "No-STL" ChallengeTo satisfy strict engineering constraints, we replaced standard libraries with custom implementations:std::vector Replacement: Created a custom NodeVector struct that handles dynamic array resizing manually.std::unordered_map Replacement: Implemented a Direct Address Table (nodeLookup[10001]) for instant $O(1)$ access to any patient ID without hash collisions.🛡️ Troubleshooting"Error: Could not find 'triage.exe'"You skipped Step 1. You must compile the C++ code before running the Python GUI."Login Failed"Delete the users_db.txt file. The system will auto-regenerate it with the default admin / admin credentials on the next launch."System Lag"The Fibonacci Heap handles 100,000+ nodes instantly. Any visual lag is due to the Python-to-C++ text pipe or the graphical animation, not the data structure.
+
+
