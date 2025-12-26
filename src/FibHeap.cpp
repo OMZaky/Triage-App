@@ -53,11 +53,9 @@ Node* FibonacciHeap::peek() {
 Node* FibonacciHeap::extractMin() {
     Node* z = minNode;
     if (z != nullptr) {
-        // 1. Promote children to root list
         if (z->child != nullptr) {
             Node* child = z->child;
             Node* start = child;
-            // Iterate children and reset parent pointers
             do {
                 Node* nextChild = child->right;
                 minNode->addSibling(child); 
@@ -66,13 +64,15 @@ Node* FibonacciHeap::extractMin() {
             } while (child != start);
         }
 
-        // Remove from lookup
+        // FIXED: Array Erasure (No .erase)
         nodeLookup[z->id] = nullptr;
 
-        // 2. Remove z from root list
+        // CRITICAL FIX: Check if z is the only node BEFORE removeSelf changes z's pointers
+        bool wasOnlyNode = (z == z->right);
+        
         z->removeSelf();
 
-        if (z == z->right) {
+        if (wasOnlyNode) {
             minNode = nullptr;
         } else {
             minNode = z->right;
