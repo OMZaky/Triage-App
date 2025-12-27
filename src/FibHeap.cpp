@@ -199,11 +199,19 @@ void FibonacciHeap::updatePriority(int id, int newPriority) {
     Node* target = nodeLookup[id];
     
     if (newPriority > target->priority) {
-        cout << "Error: Cannot increase priority directly." << endl;
-        return; 
-    }
 
-    decreaseKey(target, newPriority);
+        int savedAge = target->age;
+        string savedName = target->name;
+        string savedDesc = target->description;
+
+        removePatient(id);
+
+        insert(id, newPriority, savedAge, savedName, savedDesc);
+    }
+    
+    else {
+        decreaseKey(target, newPriority);
+    }
 }
 
 void FibonacciHeap::removePatient(int id) {
