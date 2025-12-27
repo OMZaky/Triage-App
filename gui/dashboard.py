@@ -112,10 +112,10 @@ class PatientViewModel:
         self.beat_event = False  # Flag for dashboard to play heartbeat
     
     def _calc_base_hr(self) -> int:
-        if self.priority == 1: return 135
-        elif self.priority <= 3: return 110
-        elif self.priority <= 6: return 85
-        else: return 72
+        if self.priority == 1: return 110
+        elif self.priority <= 3: return 100
+        elif self.priority <= 6: return 80
+        else: return 70
     
     def _calc_base_spo2(self) -> int:
         if self.priority == 1: return 91
@@ -151,7 +151,7 @@ class PatientViewModel:
             self._frame_count = 0
             self._update_vitals_drift()
         
-        points_per_frame = 4
+        points_per_frame = 2
         for _ in range(points_per_frame):
             self._generate_ekg_point()
     
