@@ -3,13 +3,11 @@
 #include <fstream>
 #include <sstream>
 
-// ASSIGNED TO: MEMBER 5
 
 System::System() {
     isLoggedIn = false;
     nextId = 1; 
 
-    // --- PERSISTENCE: LOAD DATA ON STARTUP ---
     // We try to open the database file. If it exists, we rebuild the heap.
     std::ifstream file("patients_data.txt");
     if (file.is_open()) {
@@ -17,7 +15,6 @@ System::System() {
         std::string name, desc;
         
         // Read line by line: [ID] [PRIORITY] [AGE] [NAME] [DESC]
-        // Note: For simplicity, we assume single-word names/desc or handle formatting in save.
         while (file >> id >> prio >> age >> name >> desc) {
             heap.insert(id, prio, age, name, desc);
 

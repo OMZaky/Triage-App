@@ -90,19 +90,17 @@ Node* FibonacciHeap::extractMin() {
             } while (child != start);
         }
 
-        // FIXED: Array Erasure (No .erase)
         nodeLookup[z->id] = nullptr;
 
-        // CRITICAL FIX: Save these BEFORE removeSelf changes z's pointers
         bool wasOnlyNode = (z == z->right);
-        Node* nextNode = z->right;  // Save the next node before removal
+        Node* nextNode = z->right;  
         
         z->removeSelf();
 
         if (wasOnlyNode) {
             minNode = nullptr;
         } else {
-            minNode = nextNode;  // Use saved pointer, not z->right
+            minNode = nextNode;  
             consolidate();
         }
         numNodes--;
@@ -244,7 +242,7 @@ void FibonacciHeap::removePatient(int id) {
     if (id < 0 || id >= MAX_PID || nodeLookup[id] == nullptr) return;
 
     // Decrease to negative infinity to force it to top
-    updatePriority(id, -9999); 
+    updatePriority(id, INT_MIN); 
     
     // Extract it
     Node* removedNode = extractMin();
