@@ -1254,9 +1254,6 @@ class DashboardFrame(ctk.CTkFrame):
                 if not (1 <= new_prio <= 10):
                     messagebox.showerror("Error", "Priority must be 1-10", parent=dialog)
                     return
-                if new_prio >= self.selected_patient.priority:
-                    messagebox.showwarning("Invalid", "Can only decrease priority (more urgent).", parent=dialog)
-                    return
                 self.bridge.send_command(f"UPDATE {self.selected_patient.id} {new_prio}")
                 self.selected_patient.priority = new_prio
                 self._refresh_sidebar()
