@@ -20,7 +20,33 @@ FibonacciHeap::FibonacciHeap() {
 }
 
 FibonacciHeap::~FibonacciHeap() {
-    // OS cleans up memory on exit.
+    _deleteAll(minNode);
+}
+
+void FibonacciHeap::_deleteAll(Node* node) {
+    if (node == nullptr) return;
+
+    
+    Node* start = node;
+    Node* last = start->left;
+    
+    last->right = nullptr; // Break the circle here
+
+    // Linear traversal
+    Node* curr = start;
+    while (curr != nullptr) {
+        Node* next = curr->right;
+        
+        // Recursively delete children first
+        if (curr->child != nullptr) {
+            _deleteAll(curr->child);
+        }
+        
+        // Delete the node itself
+        delete curr;
+        
+        curr = next;
+    }
 }
 
 void FibonacciHeap::insert(int id, int priority, int age, string name, string desc) {

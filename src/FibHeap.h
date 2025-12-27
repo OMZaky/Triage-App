@@ -27,20 +27,17 @@ private:
     void link(Node* y, Node* x);
     void decreaseKey(Node* node, int newPriority); 
     void _saveRecursive(Node* node, ofstream& file);
-    
-    // MISSING FUNCTION ADDED HERE:
+    void _deleteAll(Node* node); //for the destructor
     void consolidate(); 
 
 public:
     FibonacciHeap();
     ~FibonacciHeap();
 
-    // Main Functions
     void insert(int id, int priority, int age, string name, string desc);
     Node* peek();
     Node* extractMin();
     
-    // Advanced Features
     void updatePriority(int id, int newPriority); 
     void removePatient(int id);                   
     void merge(FibonacciHeap& other);             

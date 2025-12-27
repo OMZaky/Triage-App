@@ -46,7 +46,6 @@ void Node::removeSelf() {
     this->right = this;
 }
 
-// --- NEW FUNCTIONS REQUIRED FOR FIB HEAP ---
 
 void Node::addChild(Node* newChild) {
     if (newChild == nullptr) return;
@@ -68,13 +67,10 @@ void Node::addChild(Node* newChild) {
 void Node::removeChild(Node* target) {
     if (target == nullptr || child == nullptr) return;
 
-    // Special Case: If the target is the one our 'child' pointer points to
     if (child == target) {
         if (target->right == target) {
-            // It was the ONLY child
             child = nullptr;
         } else {
-            // There are others, just move the pointer to the neighbor
             child = target->right;
         }
     }
