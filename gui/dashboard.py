@@ -442,7 +442,7 @@ class DashboardFrame(ctk.CTkFrame):
         main = ctk.CTkFrame(self, fg_color="transparent")
         main.pack(fill="both", expand=True, padx=10, pady=10)
         
-        main.grid_columnconfigure(0, weight=0)
+        main.grid_columnconfigure(0, weight=0, minsize=300)
         main.grid_columnconfigure(1, weight=1)
         main.grid_rowconfigure(0, weight=1)
         
@@ -456,7 +456,7 @@ class DashboardFrame(ctk.CTkFrame):
     
     def _create_sidebar(self, parent: ctk.CTkFrame) -> None:
         sidebar = ctk.CTkFrame(parent, fg_color=COLORS["bg_sidebar"], width=300, corner_radius=15)
-        sidebar.grid(row=0, column=0, sticky="nsew")
+        sidebar.grid(row=0, column=0, sticky="ns")
         sidebar.grid_propagate(False)
         
         header = ctk.CTkFrame(sidebar, fg_color="transparent")
@@ -491,6 +491,7 @@ class DashboardFrame(ctk.CTkFrame):
         self.queue_scroll = ctk.CTkScrollableFrame(
             sidebar,
             fg_color="transparent",
+            width=280,
             scrollbar_button_color=COLORS["accent"],
             scrollbar_button_hover_color=COLORS["accent_hover"]
         )
@@ -929,6 +930,7 @@ class DashboardFrame(ctk.CTkFrame):
         elif cmd == "SUCCESS_MERGE":
             messagebox.showinfo("Mass Casualty", "Patient data merged successfully!")
             self.bridge.send_command("STATS")
+            self.bridge.send_command("LIST")
         
         elif cmd == "ERROR_FILE_NOT_FOUND":
             messagebox.showerror("Error", "File not found. Please select a valid file.")
