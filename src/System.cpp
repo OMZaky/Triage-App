@@ -27,7 +27,7 @@ System::System() {
 }
 
 // DESTRUCTOR (Added for Safety)
-// Automatically saves data even if the program crashes or closes unexpectedly
+
 System::~System() {
     heap.saveToFile("patients_data.txt");
 }

@@ -28,15 +28,12 @@ import os
 # =============================================================================
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
-ctk.set_widget_scaling(1.0)   # 1.0 = no scaling, 1.25 = 25% larger
+ctk.set_widget_scaling(1.0)
 ctk.set_window_scaling(1.0)
 
 
 def get_system_font() -> str:
-    """
-    Get the best available system font with cross-platform fallback.
-    Returns: Font family name that exists on this system.
-    """
+    
     preferred_fonts = ["Segoe UI", "Helvetica Neue", "Helvetica", "Arial", "sans-serif"]
     
     try:
@@ -65,10 +62,7 @@ from theme import COLORS
 
 
 def find_backend_executable() -> str | None:
-    """
-    Locate the C++ backend executable.
-    Searches common locations relative to the script.
-    """
+    
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(script_dir)
     
@@ -212,10 +206,7 @@ class TriageApp(ctk.CTk):
         self.show_login()
     
     def _on_close(self) -> None:
-        """
-        Handle window close (X button).
-        CRITICAL: Must cleanup current frame before destroying window.
-        """
+        
         # Cleanup current frame (stops threads, alarm, etc.)
         self._clear_current_frame()
         
