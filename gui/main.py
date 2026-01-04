@@ -8,14 +8,52 @@ ARCHITECTURE:
         └── DashboardFrame (CTkFrame) - Swapped in after login
 """
 
+# =============================================================================
+# WINDOWS DPI FIX - Must be FIRST before any GUI imports
+# Fixes blurry/mangled text on high-DPI displays
+# =============================================================================
+try:
+    from ctypes import windll
+    windll.shcore.SetProcessDpiAwareness(1)  # 1 = System DPI aware
+except Exception:
+    pass  # Non-Windows or older Windows - ignore
+
 import customtkinter as ctk
-from tkinter import messagebox
+from tkinter import messagebox, font as tkfont
 import sys
 import os
 
-# Configure CustomTkinter before importing other modules
+# =============================================================================
+# CUSTOMTKINTER SCALING - Prevent auto-scaling glitches
+# =============================================================================
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
+ctk.set_widget_scaling(1.0)   # 1.0 = no scaling, 1.25 = 25% larger
+ctk.set_window_scaling(1.0)
+
+
+def get_system_font() -> str:
+    """
+    Get the best available system font with cross-platform fallback.
+    Returns: Font family name that exists on this system.
+    """
+    preferred_fonts = ["Segoe UI", "Helvetica Neue", "Helvetica", "Arial", "sans-serif"]
+    
+    try:
+        # Get list of available fonts on this system
+        available = tkfont.families()
+        for font_name in preferred_fonts:
+            if font_name in available:
+                return font_name
+    except Exception:
+        pass
+    
+    # Ultimate fallback
+    return "TkDefaultFont"
+
+
+# Store the system font for use throughout the app
+SYSTEM_FONT = get_system_font()
 
 # Import our modules
 # NOTE: Ensure login_window.py has 'class LoginFrame(ctk.CTkFrame)'
@@ -52,8 +90,19 @@ def find_backend_executable() -> str | None:
 class TriageApp(ctk.CTk):
     """
     The single root window for TriageOS.
-    Manages switching between Login and Dashboard frames.
+    
+    FRAME SWAP ARCHITECTURE:
+    - Starts with LoginFrame
+    - On successful login, swaps to DashboardFrame
+    - On logout, swaps back to LoginFrame
     """
+    
+    # Colors matching dashboard.py
+    COLORS = {
+        "bg_dark": "#0f0f1a",
+        "bg_card": "#1a1a2e",
+        "accent": "#00d4ff",
+    }
     
     def __init__(self, bridge: SystemBridge):
         super().__init__()
@@ -63,21 +112,45 @@ class TriageApp(ctk.CTk):
         
         # Window configuration
         self.title("TRIAGE O.S. - Emergency Room Management")
-        self.geometry("1400x850")
         self.minsize(1000, 700)
-        self.configure(fg_color="#1a1a2e") # Dark Navy Background
+        self.configure(fg_color=self.COLORS["bg_dark"])
         
-        # Center window on screen
-        self.update_idletasks()
-        x = (self.winfo_screenwidth() // 2) - 700
-        y = (self.winfo_screenheight() // 2) - 425
-        self.geometry(f"+{x}+{y}")
+        # Responsive Sizing: Adapt to screen size
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        
+        # Store dimensions for deterministic centering
+        self.app_width = min(1400, int(screen_w * 0.90))
+        self.app_height = min(850, int(screen_h * 0.85))
+        
+        # Center immediately using stored dimensions
+        self.center_on_screen()
         
         # Handle window close (X button)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         
         # Start with login screen
         self.show_login()
+    
+    def center_on_screen(self) -> None:
+        """Centers the main window using deterministic dimensions."""
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        
+        # Calculate Position using stored dimensions (NOT winfo_width)
+        x = (screen_w - self.app_width) // 2
+        y = (screen_h - self.app_height) // 2 - 40  # Shift up for taskbar
+        
+        # Safety checks
+        x = max(0, x)
+        y = max(0, y)
+        
+        # Apply Size AND Position in one atomic command
+        self.geometry(f"{self.app_width}x{self.app_height}+{x}+{y}")
+        
+        # Force focus to front
+        self.deiconify()
+        self.lift()
     
     def _clear_current_frame(self) -> None:
         """
@@ -104,25 +177,37 @@ class TriageApp(ctk.CTk):
         """Show the login frame."""
         self._clear_current_frame()
         
-        # Instantiate LoginFrame (Pass 'self' as master)
+        # Use the LoginFrame from login_window.py
         self.current_frame = LoginFrame(
             master=self,
             bridge=self.bridge,
             on_success_callback=self.show_dashboard
         )
-        self.current_frame.pack(fill="both", expand=True)
+        # LoginFrame packs itself in __init__, but just in case:
+        if not self.current_frame.winfo_ismapped():
+            self.current_frame.pack(fill="both", expand=True)
     
     def show_dashboard(self) -> None:
         """Show the dashboard frame."""
         self._clear_current_frame()
         
-        # Instantiate DashboardFrame (Pass 'self' as master)
+        # Create DashboardFrame
         self.current_frame = DashboardFrame(
             master=self,
             bridge=self.bridge,
             on_logout_callback=self.logout_handler
         )
         self.current_frame.pack(fill="both", expand=True)
+        
+        # Activate dashboard by fetching initial data
+        self.after(100, self._activate_dashboard)
+    
+    def _activate_dashboard(self) -> None:
+        """Send initial commands to populate dashboard after login."""
+        if self.current_frame and hasattr(self.current_frame, '_enqueue_command'):
+            self.current_frame._enqueue_command("STATS")
+            self.current_frame._enqueue_command("LIST")
+            print("[Main] Dashboard activated - Loading patient data")
     
     def logout_handler(self) -> None:
         """Handle logout - cleanup dashboard and show login."""

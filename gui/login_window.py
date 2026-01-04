@@ -26,16 +26,17 @@ class LoginFrame(ctk.CTkFrame):
     - Robust cleanup handling
     """
     
-    # Color scheme
+    # Color scheme (Matching dashboard.py - WCAG AA compliant)
     COLORS = {
-        "bg_dark": "#1a1a2e",    # Deep Navy
-        "bg_card": "#16213e",    # Lighter Navy
-        "accent": "#00d4ff",     # Cyan
+        "bg_dark": "#0f0f1a",     # Primary background (same as dashboard)
+        "bg_card": "#1a1a2e",     # Card surfaces
+        "bg_input": "#1e1e38",    # Input fields - darkened for contrast
+        "accent": "#00d4ff",      # Cyan accent
         "accent_hover": "#00a8cc",
         "text": "#ffffff",
-        "text_muted": "#a0a0a0",
-        "error": "#ff4757",      # Red
-        "success": "#2ed573",    # Green
+        "text_muted": "#b0b0b0",  # Bumped for readability
+        "error": "#ff6b7a",       # Brightened critical red
+        "success": "#2ed573",     # Green
     }
     
     def __init__(self, master, bridge: SystemBridge, on_success_callback: Callable[[], None]):
@@ -65,19 +66,24 @@ class LoginFrame(ctk.CTkFrame):
         # Start background listener
         self._start_listener()
         
+        # FLUSH ZOMBIE THREADS:
+        # Send a PING to force the old Dashboard listener (if active) to read a line,
+        # realize it should stop, and release the pipe for us.
+        self.bridge.send_command("PING")
+        
         # Auto-focus username field
         self.after(100, lambda: self.user_entry.focus())
     
     def _create_ui(self) -> None:
-        """Create the centered login card and widgets."""
+        """Create the centered login card with high-contrast styling."""
         
         # === Centered Login Card ===
         self.card = ctk.CTkFrame(
             self,
             fg_color=self.COLORS["bg_card"],
             corner_radius=20,
-            width=380,
-            height=520
+            width=440,
+            height=540
         )
         # Perfectly center the card regardless of window size
         self.card.place(relx=0.5, rely=0.5, anchor="center")
@@ -92,65 +98,89 @@ class LoginFrame(ctk.CTkFrame):
         
         ctk.CTkLabel(
             self.card,
-            text="TRIAGE O.S.",
-            font=ctk.CTkFont(family="Segoe UI", size=28, weight="bold"),
+            text="SYSTEM LOGIN",
+            font=ctk.CTkFont(size=24, weight="bold"),
             text_color=self.COLORS["accent"]
         ).pack(pady=(0, 5))
         
         ctk.CTkLabel(
             self.card,
-            text="Emergency Room Management System",
+            text="TRIAGE O.S. - Emergency Room Management",
             font=ctk.CTkFont(size=12),
             text_color=self.COLORS["text_muted"]
         ).pack(pady=(0, 30))
         
         # === Form Container ===
         form = ctk.CTkFrame(self.card, fg_color="transparent")
-        form.pack(fill="x", padx=35)
+        form.pack(fill="x", padx=30)
         
-        # Username
+        # Username label
+        ctk.CTkLabel(
+            form,
+            text="Username:",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=self.COLORS["text"]
+        ).pack(anchor="w", pady=(0, 4))
+        
+        # Username input - High contrast styling
         self.user_entry = ctk.CTkEntry(
             form,
-            placeholder_text="Username",
             font=ctk.CTkFont(size=14),
             height=45,
             corner_radius=10,
+            fg_color=self.COLORS["bg_input"],
+            text_color="#ffffff",
             border_width=2,
-            border_color=self.COLORS["accent"]
+            border_color=self.COLORS["accent"],
+            placeholder_text="Enter username",
+            placeholder_text_color=self.COLORS["text_muted"]
         )
         self.user_entry.pack(fill="x", pady=(0, 15))
         
-        # Password
+        # Password label
+        ctk.CTkLabel(
+            form,
+            text="Password:",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=self.COLORS["text"]
+        ).pack(anchor="w", pady=(0, 4))
+        
+        # Password input - High contrast styling
         self.pass_entry = ctk.CTkEntry(
             form,
-            placeholder_text="Password",
             font=ctk.CTkFont(size=14),
             height=45,
             corner_radius=10,
+            fg_color=self.COLORS["bg_input"],
+            text_color="#ffffff",
             border_width=2,
             border_color=self.COLORS["accent"],
+            placeholder_text="Enter password",
+            placeholder_text_color=self.COLORS["text_muted"],
             show="•"
         )
-        self.pass_entry.pack(fill="x", pady=(0, 15))
+        self.pass_entry.pack(fill="x", pady=(0, 12))
         
         # Error Label
         self.error_label = ctk.CTkLabel(
             form,
             text="",
-            font=ctk.CTkFont(size=12),
+            font=ctk.CTkFont(size=12, weight="bold"),
             text_color=self.COLORS["error"]
         )
-        self.error_label.pack(pady=(0, 10))
+        self.error_label.pack(pady=(0, 8))
         
-        # Login Button
+        # Login Button - Dark text on cyan for high contrast
         self.login_btn = ctk.CTkButton(
             form,
-            text="Login",
-            font=ctk.CTkFont(size=16, weight="bold"),
+            text="🔐 Login",
+            font=ctk.CTkFont(size=14, weight="bold"),
             height=50,
-            corner_radius=10,
+            corner_radius=6,
             fg_color=self.COLORS["accent"],
             hover_color=self.COLORS["accent_hover"],
+            text_color="#0a0a14",  # Dark navy text for high contrast
+            text_color_disabled="#ffffff",  # White text when disabled
             command=self._attempt_login
         )
         self.login_btn.pack(fill="x", pady=(5, 0))
@@ -182,7 +212,7 @@ class LoginFrame(ctk.CTkFrame):
             self.pass_entry.focus()
             return
             
-        self.login_btn.configure(state="disabled", text="Authenticating...")
+        self.login_btn.configure(state="disabled", text="Authenticating...", text_color="#ffffff")
         self._clear_error()
         
         # Send to C++ Backend
