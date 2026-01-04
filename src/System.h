@@ -17,6 +17,7 @@ private:
 
 public:
     System();
+    ~System();
     void run(); // The main loop
 };
 

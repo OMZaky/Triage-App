@@ -15,7 +15,9 @@ import threading
 import time
 import random
 import math
-from typing import Optional, List, Callable
+import queue
+from collections import deque
+from typing import Optional, List, Callable, Deque
 
 # Import the bridge for backend communication
 from bridge import SystemBridge
@@ -58,110 +60,200 @@ def get_priority_color(priority: int) -> str:
 
 
 # =============================================================================
-# PATIENT VIEW MODEL (Realistic Medical Simulation)
+# PATIENT CARD (Reusable Widget for Sidebar)
+# =============================================================================
+class PatientCard(ctk.CTkFrame):
+    """Reusable patient row widget to prevent destroy/create cycles."""
+    
+    def __init__(self, master):
+        super().__init__(master, fg_color=COLORS["bg_dark"], corner_radius=10, border_width=2)
+        
+        self._content = ctk.CTkFrame(self, fg_color="transparent")
+        self._content.pack(fill="x", padx=10, pady=8)
+        
+        self._name_label = ctk.CTkLabel(
+            self._content, 
+            text="", 
+            font=ctk.CTkFont(size=13, weight="bold"), 
+            text_color=COLORS["text"]
+        )
+        self._name_label.pack(anchor="w")
+        
+        self._details_label = ctk.CTkLabel(
+            self._content, 
+            text="", 
+            font=ctk.CTkFont(size=10), 
+            text_color=COLORS["text_muted"]
+        )
+        self._details_label.pack(anchor="w")
+        
+        self._badge = ctk.CTkLabel(
+            self, 
+            text="", 
+            font=ctk.CTkFont(size=11, weight="bold"), 
+            corner_radius=5, 
+            width=40, 
+            height=24
+        )
+        self._badge.place(relx=1.0, rely=0.5, anchor="e", x=-10)
+        
+        self.patient_id = None  # Track who I am displaying
+        self._click_callback = None
+        
+        # Click events
+        for w in [self, self._content, self._name_label, self._details_label]:
+            w.bind("<Button-1>", self._on_click)
+            w.configure(cursor="hand2")
+    
+    def bind_click(self, callback):
+        self._click_callback = callback
+    
+    def _on_click(self, event):
+        if self._click_callback and self.patient_id is not None:
+            self._click_callback(self.patient_id)
+    
+    def update_data(self, patient):
+        """Update labels without destroying widget."""
+        self.patient_id = patient.id
+        color = get_priority_color(patient.priority)
+        
+        self.configure(border_color=color)
+        self._name_label.configure(text=patient.name)
+        self._details_label.configure(text=f"ID: {patient.id} | Age: {patient.age} | {patient.condition}")
+        
+        self._badge.configure(
+            text=f"P{patient.priority}",
+            fg_color=color,
+            text_color=COLORS["bg_dark"] if patient.priority > 2 else COLORS["text"]
+        )
+
+
+# =============================================================================
+# PATIENT VIEW MODEL (High-Performance Lookup Table EKG)
 # =============================================================================
 class PatientViewModel:
     """
-    Stores local state for a patient with realistic simulated vitals and EKG.
+    Platinum Standard Patient Model (ECGSYN-Lite).
+    Features: 
+    - Decoupled Visuals: Written BPM is medically accurate (Fast), 
+      but Monitor Animation is cinematic (Slow/Readable).
+    - Threshold Crossing Beat Detection (Perfect Audio Sync)
     """
+    __slots__ = [
+        'id', 'name', 'age', 'priority', 'condition',
+        'heart_rate', 'spo2', 'bp_sys', 'bp_dia',
+        '_base_hr', '_base_spo2', '_base_bp_sys', '_base_bp_dia',
+        '_hr_drift', '_spo2_drift', '_bp_sys_drift', '_bp_dia_drift',
+        'ekg_data', '_play_head', '_last_play_head', '_frame_count',
+        '_resp_phase', '_resp_rate', 'beat_event'
+    ]
     
-    # EKG Wave Parameters
-    EKG_WAVES = {
-        'P': {'amp': -12, 'pos': 0.12, 'width': 0.025},
-        'Q': {'amp': 8, 'pos': 0.20, 'width': 0.008},
-        'R': {'amp': -80, 'pos': 0.23, 'width': 0.012},
-        'S': {'amp': 18, 'pos': 0.27, 'width': 0.010},
-        'T': {'amp': -25, 'pos': 0.42, 'width': 0.045},
-    }
+    _WAVE_TEMPLATE: List[float] = []
+    
+    @classmethod
+    def _init_template(cls) -> None:
+        if cls._WAVE_TEMPLATE: return
+        
+        # Waveform Parameters (Lead II Standard)
+        # Positive values = UP spikes
+        waves = {
+            'P': {'amp': 15, 'pos': 0.12, 'width': 0.025},    # P-wave UP
+            'Q': {'amp': -12, 'pos': 0.20, 'width': 0.008},   # Q-dip DOWN
+            'R': {'amp': 120, 'pos': 0.23, 'width': 0.012},   # R-spike BIG UP
+            'S': {'amp': -25, 'pos': 0.27, 'width': 0.010},   # S-dip DOWN
+            'T': {'amp': 35, 'pos': 0.42, 'width': 0.045},    # T-wave UP
+            'U': {'amp': 8, 'pos': 0.55, 'width': 0.040},     # U-wave UP
+        }
+        
+        def gaussian(x, amp, mu, sigma):
+            return amp * math.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
+            
+        for i in range(100):
+            phase = i / 100.0
+            y = 100.0
+            if 0.05 < phase < 0.7:
+                for params in waves.values():
+                    y += gaussian(phase, params['amp'], params['pos'], params['width'])
+            cls._WAVE_TEMPLATE.append(y)
+
+    @staticmethod
+    def _lerp(start: float, end: float, t: float) -> float:
+        return start * (1.0 - t) + end * t
     
     def __init__(self, pid: int, name: str, age: int, priority: int, condition: str):
+        PatientViewModel._init_template()
         self.id = pid
         self.name = name
         self.age = age
         self.priority = int(priority)
         self.condition = condition
         
-        # Base vitals based on priority
+        # Initial Vitals
         self._base_hr = self._calc_base_hr()
         self._base_spo2 = self._calc_base_spo2()
         self._base_bp_sys = self._calc_base_bp_sys()
         self._base_bp_dia = self._calc_base_bp_dia()
         
-        # Current vitals with drift state
         self.heart_rate = self._base_hr
         self.spo2 = self._base_spo2
         self.bp_sys = self._base_bp_sys
         self.bp_dia = self._base_bp_dia
         
-        # Drift velocities
         self._hr_drift = 0.0
         self._spo2_drift = 0.0
         self._bp_sys_drift = 0.0
         self._bp_dia_drift = 0.0
         
-        # EKG buffer (200 points for lower CPU usage)
-        self.ekg_data: List[float] = [100.0] * 200
-        self._ekg_time = 0.0
+        self.ekg_data = deque([100.0] * 200, maxlen=200)
+        self._play_head = float(random.randint(0, 99))
+        self._last_play_head = self._play_head
         self._frame_count = 0
         
-        # Heart Rate Variability state
-        self._rsa_phase = random.uniform(0, 2 * math.pi)
-        self._rsa_frequency = 0.25
-        self._arrhythmia_factor = 0.15 if self.priority == 1 else 0.0
-        self._beat_triggered = False
-        self.beat_event = False  # Flag for dashboard to play heartbeat
+        self._resp_phase = random.uniform(0, 2 * math.pi)
+        self._resp_rate = random.uniform(0.02, 0.04) 
+        
+        self.beat_event = False
     
     def _calc_base_hr(self) -> int:
-        if self.priority == 1: return 110
-        elif self.priority <= 3: return 100
-        elif self.priority <= 6: return 80
-        else: return 70
+        # WRITTEN BPM: High/Realistic values
+        # The text will show these high numbers (e.g., 135)
+        if self.priority == 1: return 135  # Critical
+        elif self.priority <= 3: return 110 # High
+        elif self.priority <= 6: return 85  # Moderate
+        else: return 72                    # Stable
     
     def _calc_base_spo2(self) -> int:
         if self.priority == 1: return 91
         elif self.priority <= 3: return 94
         else: return 98
-    
+
     def _calc_base_bp_sys(self) -> int:
         if self.priority == 1: return 155
         elif self.priority <= 3: return 135
         else: return 120
-    
+
     def _calc_base_bp_dia(self) -> int:
         if self.priority == 1: return 95
         elif self.priority <= 3: return 88
         else: return 80
-    
-    def _gaussian(self, x: float, amp: float, mu: float, sigma: float) -> float:
-        return amp * math.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
-    
-    def _get_hrv_heart_rate(self) -> float:
-        rsa_amplitude = 5.0 if self.priority > 2 else 3.0
-        rsa_component = rsa_amplitude * math.sin(self._rsa_phase)
-        arrhythmia = 0.0
-        if self._arrhythmia_factor > 0:
-            arrhythmia = random.gauss(0, self._base_hr * self._arrhythmia_factor)
-        return self._base_hr + self._hr_drift + rsa_component + arrhythmia
-    
+
     def update_vitals(self) -> None:
         self._frame_count += 1
-        self._rsa_phase += 2 * math.pi * self._rsa_frequency * 0.05
+        self._resp_phase += self._resp_rate
         
-        if self._frame_count >= 10:
+        if self._frame_count >= 30:
             self._frame_count = 0
             self._update_vitals_drift()
         
-        points_per_frame = 2
-        for _ in range(points_per_frame):
-            self._generate_ekg_point()
-    
+        self._generate_ekg_point()
+
     def _update_vitals_drift(self) -> None:
-        drift_strength = 0.3 if self.priority == 1 else 0.15
+        drift = 0.3 if self.priority == 1 else 0.15
         
-        self._hr_drift += random.gauss(0, drift_strength * 2)
-        self._spo2_drift += random.gauss(0, drift_strength * 0.3)
-        self._bp_sys_drift += random.gauss(0, drift_strength)
-        self._bp_dia_drift += random.gauss(0, drift_strength * 0.5)
+        self._hr_drift += random.gauss(0, drift * 2)
+        self._spo2_drift += random.gauss(0, drift * 0.3)
+        self._bp_sys_drift += random.gauss(0, drift)
+        self._bp_dia_drift += random.gauss(0, drift * 0.5)
         
         damping = 0.9
         self._hr_drift *= damping
@@ -169,47 +261,63 @@ class PatientViewModel:
         self._bp_sys_drift *= damping
         self._bp_dia_drift *= damping
         
-        self._hr_drift = max(-8, min(8, self._hr_drift))
-        self._spo2_drift = max(-3, min(1, self._spo2_drift))
-        self._bp_sys_drift = max(-8, min(8, self._bp_sys_drift))
-        self._bp_dia_drift = max(-5, min(5, self._bp_dia_drift))
+        rsa_factor = 5.0 * math.sin(self._resp_phase)
         
-        self.heart_rate = int(self._base_hr + self._hr_drift + 3 * math.sin(self._rsa_phase))
+        # This updates the WRITTEN heart rate (High)
+        self.heart_rate = int(self._base_hr + self._hr_drift + rsa_factor)
         self.spo2 = int(max(85, min(100, self._base_spo2 + self._spo2_drift)))
         self.bp_sys = int(self._base_bp_sys + self._bp_sys_drift)
         self.bp_dia = int(self._base_bp_dia + self._bp_dia_drift)
-    
+
     def _generate_ekg_point(self) -> None:
-        dt = 0.012
-        self._ekg_time += dt
+        # DECOUPLING LOGIC:
+        # We want the monitor/sound to be slower (calmer) than the written text.
+        # We create a "Visual BPM" that is ~60% of the real medical BPM.
+        visual_bpm = self.heart_rate * 0.45
         
-        current_hr = self._get_hrv_heart_rate()
-        beat_duration = 60.0 / current_hr
+        # Clamp it to ensure animation never goes crazy fast or dead stop
+        # Range: 45 (Slow/Resting) to 85 (Fast but readable)
+        visual_bpm = max(25, min(85, visual_bpm))
         
-        phase = (self._ekg_time % beat_duration) / beat_duration
+        # Use visual_bpm for the step calculation
+        step = (100 * (visual_bpm / 60.0)) / 30.0
         
-        # Heartbeat flag (dashboard handles actual sound)
-        if self.priority != 1:
-            if 0.22 < phase < 0.28 and not self._beat_triggered:
-                self.beat_event = True  # Signal dashboard to play sound
-                self._beat_triggered = True
-            elif phase >= 0.28 or phase < 0.22:
-                self._beat_triggered = False
+        self._last_play_head = self._play_head
+        self._play_head = (self._play_head + step) % 100
         
-        y = 100.0
-        for wave_name, params in self.EKG_WAVES.items():
-            amp = params['amp']
-            pos = params['pos']
-            width = params['width']
-            if wave_name == 'R' and self.priority <= 2:
-                amp *= 1.15
-            y += self._gaussian(phase, amp, pos, width)
+        # Lerp
+        idx_floor = int(self._play_head)
+        idx_ceil = (idx_floor + 1) % 100
+        fraction = self._play_head - idx_floor
         
-        noise_level = 1.5 if self.priority == 1 else 0.5
-        y += random.gauss(0, noise_level)
-        y = max(30, min(170, y))
+        val_start = self._WAVE_TEMPLATE[idx_floor]
+        val_end = self._WAVE_TEMPLATE[idx_ceil]
         
-        self.ekg_data.pop(0)
+        y = self._lerp(val_start, val_end, fraction)
+        
+        # Baseline Wander
+        baseline_wander = 3.0 * math.sin(self._resp_phase)
+        y += baseline_wander
+        
+        # Noise
+        noise = 1.0 if self.priority == 1 else 0.4
+        y += random.gauss(0, noise)
+        
+        # Sync Logic (Uses Visual BPM)
+        peak_idx = 23
+        crossed = False
+        
+        if self._last_play_head < peak_idx <= self._play_head:
+            crossed = True
+        elif self._play_head < self._last_play_head:
+            # Wrap-around case: playhead crossed from ~99 back to ~0
+            # Check if peak_idx was passed either before wrap or after
+            if self._last_play_head < peak_idx or self._play_head >= peak_idx:
+                crossed = True
+                 
+        if crossed and self.priority != 1:
+            self.beat_event = True
+                
         self.ekg_data.append(y)
 
 
@@ -229,7 +337,7 @@ class DashboardFrame(ctk.CTkFrame):
         self.running = True
         self.is_logging_out = False
         
-        self.patients: List[PatientViewModel] = []
+        self.patients: dict[int, PatientViewModel] = {}  # Dict for O(1) lookups
         self.selected_patient: Optional[PatientViewModel] = None
         self.patient_count = 0
         self.estimated_wait = 0
@@ -237,6 +345,9 @@ class DashboardFrame(ctk.CTkFrame):
         
         self.sound_engine = SoundEngine()
         self._alarm_playing = False
+        self._ekg_x_coords: List[float] = []  # Pre-calculated X coordinates
+        self._card_pool: List[PatientCard] = []  # Reusable card widgets
+        self.msg_queue: queue.Queue = queue.Queue()  # Thread-safe message queue
         
         self.pack(fill="both", expand=True)
         
@@ -247,10 +358,12 @@ class DashboardFrame(ctk.CTkFrame):
         self._start_animation_loop()
         self._start_cpp_listener()
         self._start_simulation_loop()
+        self._process_queue_batch()  # Start the batch consumer loop
         
         # Use 'after' with safe checks
         self.after(500, self._safe_send_stats)
         self.after(600, self._safe_send_list)
+        
 
     def _safe_send_stats(self):
         if self.running and self.winfo_exists():
@@ -487,6 +600,24 @@ class DashboardFrame(ctk.CTkFrame):
             text_color=COLORS["accent"]
         )
         self.wait_label.pack(pady=8)
+        
+        # Search bar for filtering patients
+        search_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+        search_frame.pack(fill="x", padx=10, pady=(0, 10))
+        
+        self._search_var = tk.StringVar()
+        self._search_var.trace_add("write", lambda *args: self._request_sidebar_refresh())
+        
+        self.search_entry = ctk.CTkEntry(
+            search_frame,
+            height=32,
+            corner_radius=8,
+            placeholder_text="🔍 Search by name or ID...",
+            textvariable=self._search_var,
+            fg_color=COLORS["bg_input"],
+            border_color=COLORS["accent"]
+        )
+        self.search_entry.pack(fill="x")
         
         self.queue_scroll = ctk.CTkScrollableFrame(
             sidebar,
@@ -736,25 +867,48 @@ class DashboardFrame(ctk.CTkFrame):
                             self.selected_patient.beat_event = False
                         
                         self._update_monitor()
-                    self.after(50, animate)
+                    self.after(33, animate)
             except Exception:
                 pass
         animate()
     
     def _start_cpp_listener(self) -> None:
+        """Background thread that dumps C++ messages into a thread-safe queue."""
         def listen():
             while self.running:
                 try:
                     line = self.bridge.read_line()
-                    if line is None:
+                    if line:
+                        # OPTIMIZATION: Push to queue instead of scheduling callback
+                        # This prevents event loop flooding during mass data dumps
+                        self.msg_queue.put(line)
+                    elif line is None:
                         if not self.running: break
-                        time.sleep(0.5)
-                        continue
-                    if line and self.running:
-                        self.after(0, lambda l=line: self._process_response(l))
+                        time.sleep(0.1)
                 except Exception:
                     break
         threading.Thread(target=listen, daemon=True).start()
+    
+    def _process_queue_batch(self) -> None:
+        """
+        Consumes messages from the queue in batches.
+        Prevents GUI freeze by processing up to 100 items per frame.
+        """
+        if not self.running or not self.winfo_exists():
+            return
+        
+        # Process up to 100 messages at once (Batching)
+        count = 0
+        while not self.msg_queue.empty() and count < 100:
+            try:
+                line = self.msg_queue.get_nowait()
+                self._process_response(line)
+                count += 1
+            except queue.Empty:
+                break
+        
+        # Schedule next batch check in 20ms (approx 50 FPS)
+        self.after(20, self._process_queue_batch)
     
     def _start_simulation_loop(self) -> None:
         def simulate():
@@ -767,14 +921,14 @@ class DashboardFrame(ctk.CTkFrame):
                     
                     if not self.running: return
                     
-                    stable_patients = [p for p in self.patients if p.priority > 1]
+                    stable_patients = [p for p in self.patients.values() if p.priority > 1]
                     if stable_patients:
                         patient = random.choice(stable_patients)
                         patient.priority = 1
                         
                         self.after(0, lambda pid=patient.id: self.bridge.send_command(f"UPDATE {pid} 1"))
                         self.after(0, lambda name=patient.name: self._show_deterioration_alert(name))
-                        self.after(100, self._refresh_sidebar)
+                        self.after(100, self._request_sidebar_refresh)
                 except Exception:
                     if not self.running: return
         threading.Thread(target=simulate, daemon=True).start()
@@ -830,41 +984,31 @@ class DashboardFrame(ctk.CTkFrame):
         
         if cmd == "SUCCESS_ADD":
             name = parts[1] if len(parts) > 1 else "Unknown"
-            pid = 0
-            for p in parts:
-                if p.startswith("ID:"):
-                    pid = int(p[3:])
-            
             display_name = name.replace("_", " ")
-            for patient in self.patients:
-                if patient.id == 0 and (patient.name == name or patient.name == display_name):
-                    patient.id = pid
-                    break
-            
-            self._refresh_sidebar()
+            # Let backend be source of truth - refresh list from C++
+            self.bridge.send_command("LIST")
             self.bridge.send_command("STATS")
-            messagebox.showinfo("Patient Added", f"{display_name} added with ID: {pid}")
+            messagebox.showinfo("Patient Added", f"{display_name} added successfully!")
         
         elif cmd == "DATA":
             if len(parts) >= 6:
                 pid, prio, age = int(parts[1]), int(parts[2]), int(parts[3])
                 name, desc = parts[4], parts[5]
                 
+                # Standardize display format (remove underscores)
                 display_name = name.replace("_", " ")
                 display_desc = desc.replace("_", " ")
                 
                 if self.pending_extract:
                     self.pending_extract = False
-                    self.patients = [p for p in self.patients 
-                                     if not (p.id == pid or 
-                                            (p.id == 0 and (p.name == name or p.name == display_name)))]
+                    # Remove patient by ID (O(1) operation)
+                    if pid in self.patients:
+                        del self.patients[pid]
                     
-                    if self.selected_patient and (self.selected_patient.id == pid or 
-                                                   self.selected_patient.name == name or 
-                                                   self.selected_patient.name == display_name):
+                    if self.selected_patient and self.selected_patient.id == pid:
                         self.selected_patient = None
                     
-                    self._refresh_sidebar()
+                    self._request_sidebar_refresh()
                     self._update_monitor()
                     self.bridge.send_command("STATS")
                     self.bridge.send_command("LIST")
@@ -873,10 +1017,14 @@ class DashboardFrame(ctk.CTkFrame):
                     self._show_treatment_alert(display_name, pid, prio, diagnosis)
                     self.current_diagnosis = None
                 else:
-                    patient = PatientViewModel(pid, name, age, prio, desc)
-                    if not any(p.id == pid for p in self.patients):
-                        self.patients.append(patient)
-                        self._refresh_sidebar()
+                    # O(1) duplicate check with dict
+                    if pid not in self.patients:
+                        # FIX: Use 'display_name' and 'display_desc' instead of raw 'name'/'desc'
+                        patient = PatientViewModel(pid, display_name, age, prio, display_desc)
+                        self.patients[pid] = patient
+                        self._request_sidebar_refresh()
+                    else:
+                        patient = self.patients[pid]
                     self.selected_patient = patient
                     self._update_monitor()
         
@@ -900,10 +1048,11 @@ class DashboardFrame(ctk.CTkFrame):
                 display_name = name.replace("_", " ")
                 display_desc = desc.replace("_", " ")
                 
-                if not any(p.id == pid for p in self.patients):
+                # O(1) duplicate check with dict
+                if pid not in self.patients:
                     patient = PatientViewModel(pid, display_name, age, prio, display_desc)
-                    self.patients.append(patient)
-                    self._refresh_sidebar()
+                    self.patients[pid] = patient
+                    self._request_sidebar_refresh()
         
         elif cmd == "SUCCESS_UPDATE":
             messagebox.showinfo("Updated", "Patient priority updated.")
@@ -911,10 +1060,12 @@ class DashboardFrame(ctk.CTkFrame):
         
         elif cmd == "SUCCESS_REMOVE":
             pid = int(parts[1]) if len(parts) > 1 else 0
-            self.patients = [p for p in self.patients if p.id != pid]
+            # O(1) deletion with dict
+            if pid in self.patients:
+                del self.patients[pid]
             if self.selected_patient and self.selected_patient.id == pid:
                 self.selected_patient = None
-            self._refresh_sidebar()
+            self._request_sidebar_refresh()
             self._update_monitor()
             self.bridge.send_command("STATS")
         
@@ -938,79 +1089,92 @@ class DashboardFrame(ctk.CTkFrame):
         elif cmd.startswith("ERROR"):
             messagebox.showerror("Error", line)
     
+    def _request_sidebar_refresh(self) -> None:
+        """Request a debounced sidebar refresh - batches multiple calls into one."""
+        if getattr(self, "_refresh_pending", False):
+            return  # Already scheduled
+        self._refresh_pending = True
+        # Wait 50ms to gather all incoming data, then refresh ONCE
+        self.after(50, self._execute_sidebar_refresh)
+    
+    def _execute_sidebar_refresh(self) -> None:
+        """Execute the actual sidebar refresh."""
+        self._refresh_sidebar()
+        self._refresh_pending = False
+    
     def _refresh_sidebar(self) -> None:
         if not self.winfo_exists(): return
         
-        count = len(self.patients)
-        self.queue_count.configure(text=f"{count} patients")
+        # 1. Get all patients
+        all_patients = list(self.patients.values())
+        total_count = len(all_patients)
         
+        # 2. Filter by search text
+        search_text = getattr(self, '_search_var', None)
+        if search_text:
+            query = search_text.get().strip().lower()
+            if query:
+                all_patients = [
+                    p for p in all_patients
+                    if query in p.name.lower() or query in str(p.id)
+                ]
+        
+        filtered_count = len(all_patients)
+        
+        # 3. Sort by priority
+        sorted_patients = sorted(all_patients, key=lambda p: p.priority)
+        
+        # 4. Update count label
+        if filtered_count == 0 and total_count > 0:
+            display_text = f"{total_count} patients (no matches)"
+        elif filtered_count > 50:
+            display_text = f"{filtered_count} patients (showing top 50)"
+        else:
+            display_text = f"{filtered_count} patients"
+        self.queue_count.configure(text=display_text)
+        
+        # --- FIX: Only destroy labels (placeholders), preserve PatientCards ---
         for widget in self.queue_scroll.winfo_children():
-            widget.destroy()
+            if isinstance(widget, ctk.CTkLabel):
+                widget.destroy()
         
-        if not self.patients:
+        if not sorted_patients:
+            # Hide all cards (don't destroy them!)
+            for card in self._card_pool:
+                card.pack_forget()
+                
             self.placeholder = ctk.CTkLabel(
                 self.queue_scroll,
-                text="No patients in queue\n\nAdd patients using\nthe control panel",
+                text="No patients in queue\n\nAdd patients using\nthe control panel" if total_count == 0 else "No matches found\n\nTry a different search",
                 font=ctk.CTkFont(size=12),
                 text_color=COLORS["text_muted"],
                 justify="center"
             )
             self.placeholder.pack(expand=True, pady=50)
             return
+        # ---------------------------------------------------------------------
+
+        # 5. RECYCLE WIDGETS
+        required_count = min(len(sorted_patients), 50)
         
-        for patient in sorted(self.patients, key=lambda p: p.priority):
-            self._create_patient_card(patient)
+        while len(self._card_pool) < required_count:
+            new_card = PatientCard(self.queue_scroll)
+            new_card.bind_click(self._on_card_click)
+            self._card_pool.append(new_card)
+        
+        for i in range(required_count):
+            card = self._card_pool[i]
+            card.update_data(sorted_patients[i])
+            card.pack(fill="x", pady=4, padx=5)
+        
+        for i in range(required_count, len(self._card_pool)):
+            self._card_pool[i].pack_forget()
     
-    def _create_patient_card(self, patient: PatientViewModel) -> None:
-        color = get_priority_color(patient.priority)
-        
-        card = ctk.CTkFrame(
-            self.queue_scroll,
-            fg_color=COLORS["bg_dark"],
-            corner_radius=10,
-            border_width=2,
-            border_color=color
-        )
-        card.pack(fill="x", pady=4, padx=5)
-        
-        content = ctk.CTkFrame(card, fg_color="transparent")
-        content.pack(fill="x", padx=10, pady=8)
-        
-        name_label = ctk.CTkLabel(
-            content,
-            text=patient.name,
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=COLORS["text"]
-        )
-        name_label.pack(anchor="w")
-        
-        details = ctk.CTkLabel(
-            content,
-            text=f"ID: {patient.id} | Age: {patient.age} | {patient.condition}",
-            font=ctk.CTkFont(size=10),
-            text_color=COLORS["text_muted"]
-        )
-        details.pack(anchor="w")
-        
-        badge = ctk.CTkLabel(
-            card,
-            text=f"P{patient.priority}",
-            font=ctk.CTkFont(size=11, weight="bold"),
-            fg_color=color,
-            corner_radius=5,
-            width=40,
-            height=24,
-            text_color=COLORS["bg_dark"] if patient.priority > 2 else COLORS["text"]
-        )
-        badge.place(relx=1.0, rely=0.5, anchor="e", x=-10)
-        
-        def on_click(e, p=patient):
-            self.selected_patient = p
+    def _on_card_click(self, pid: int) -> None:
+        """Handle click on a patient card."""
+        if pid in self.patients:
+            self.selected_patient = self.patients[pid]
             self._update_monitor()
-        
-        for w in [card, content, name_label, details]:
-            w.bind("<Button-1>", on_click)
-            w.configure(cursor="hand2")
     
     def _update_monitor(self) -> None:
         if not self.running or not self.winfo_exists(): return
@@ -1030,16 +1194,36 @@ class DashboardFrame(ctk.CTkFrame):
             return
         
         p = self.selected_patient
-        self.patient_name.configure(text=f"ID:{p.id} - {p.name}")
-        self.hr_value.configure(text=str(p.heart_rate))
-        self.spo2_value.configure(text=str(p.spo2))
-        self.bp_value.configure(text=f"{p.bp_sys}/{p.bp_dia}")
+        
+        # Smart UI updates - only configure if value changed
+        new_name = f"ID:{p.id} - {p.name}"
+        if self.patient_name.cget("text") != new_name:
+            self.patient_name.configure(text=new_name)
+        
+        new_hr = str(p.heart_rate)
+        if self.hr_value.cget("text") != new_hr:
+            self.hr_value.configure(text=new_hr)
+        
+        new_spo2 = str(p.spo2)
+        if self.spo2_value.cget("text") != new_spo2:
+            self.spo2_value.configure(text=new_spo2)
+        
+        new_bp = f"{p.bp_sys}/{p.bp_dia}"
+        if self.bp_value.cget("text") != new_bp:
+            self.bp_value.configure(text=new_bp)
         
         prio_color = get_priority_color(p.priority)
-        self.prio_value.configure(text=str(p.priority), text_color=prio_color)
+        new_prio = str(p.priority)
+        if self.prio_value.cget("text") != new_prio:
+            self.prio_value.configure(text=new_prio, text_color=prio_color)
         
-        self.condition_label.configure(text=f"Condition: {p.condition}")
-        self.age_label.configure(text=f"Age: {p.age} years")
+        new_condition = f"Condition: {p.condition}"
+        if self.condition_label.cget("text") != new_condition:
+            self.condition_label.configure(text=new_condition)
+        
+        new_age = f"Age: {p.age} years"
+        if self.age_label.cget("text") != new_age:
+            self.age_label.configure(text=new_age)
         
         if p.priority == 1:
             if not self._alarm_playing:
@@ -1053,21 +1237,31 @@ class DashboardFrame(ctk.CTkFrame):
         self._draw_ekg(p)
     
     def _draw_ekg(self, patient: PatientViewModel) -> None:
-        self.ekg_canvas.delete("ekg_line")
-        width = self.ekg_canvas.winfo_width()
+        """Draw EKG using canvas recycling and pre-calculated coordinates."""
         height = self.ekg_canvas.winfo_height()
-        if width < 10 or height < 10: return
+        if height < 10 or not self._ekg_x_coords: return
         
         color = get_priority_color(patient.priority)
         points = []
-        data_len = len(patient.ekg_data)
+        
+        # MATH OPTIMIZATION & RESCALING
+        # Previous scale (0.005) clips the new big spikes (Amp 120).
+        # Adjusted to 0.004 to fit the larger waveform comfortably.
+        y_scale = height * 0.004  
+        
         for i, value in enumerate(patient.ekg_data):
-            x = (i / data_len) * width
-            y = height - ((value / 200) * height)
-            points.extend([x, y])
+            if i < len(self._ekg_x_coords):
+                x = self._ekg_x_coords[i]
+                # Positive values go UP (Tkinter Y=0 is top)
+                y = height - (value * y_scale)
+                points.extend([x, y])
         
         if len(points) >= 4:
-            self.ekg_canvas.create_line(points, fill=color, width=2, smooth=False, tags="ekg_line")
+            if not self.ekg_canvas.find_withtag("ekg_line"):
+                self.ekg_canvas.create_line(points, fill=color, width=2, smooth=True, tags="ekg_line")
+            else:
+                self.ekg_canvas.coords("ekg_line", *points)
+                self.ekg_canvas.itemconfig("ekg_line", fill=color)
     
     def _on_ekg_resize(self, event=None) -> None:
         self.ekg_canvas.delete("grid")
@@ -1075,13 +1269,18 @@ class DashboardFrame(ctk.CTkFrame):
         height = self.ekg_canvas.winfo_height()
         if width < 10 or height < 10: return
         
+        # Pre-calculate X coordinates (eliminates 200 divisions per frame)
+        self._ekg_x_coords = [(i / 200) * width for i in range(200)]
+        
         for i in range(0, width, 20):
             self.ekg_canvas.create_line(i, 0, i, height, fill=COLORS["grid"], tags="grid")
         for i in range(0, height, 20):
             self.ekg_canvas.create_line(0, i, width, i, fill=COLORS["grid"], tags="grid")
     
     def _reset_ekg(self) -> None:
-        self.ekg_canvas.delete("ekg_line")
+        """Hide EKG line by moving it off-screen (faster than deleting)."""
+        if self.ekg_canvas.find_withtag("ekg_line"):
+            self.ekg_canvas.coords("ekg_line", -10, -10, -10, -10)
     
     def _show_treatment_alert(self, name: str, pid: int, priority: int, diagnosis: str = "") -> None:
         if not self.winfo_exists(): return
@@ -1169,11 +1368,9 @@ class DashboardFrame(ctk.CTkFrame):
                 
                 name_backend = name_input.replace(" ", "_")
                 cond_backend = cond_input.replace(" ", "_")
+                # Send to C++ backend - DO NOT create local patient
+                # Wait for SUCCESS_ADD response which will refresh the list
                 self.bridge.send_command(f"ADD {prio} {age} {name_backend} {cond_backend}")
-                
-                new_patient = PatientViewModel(0, name_input, age, prio, cond_input)
-                self.patients.append(new_patient)
-                self._refresh_sidebar()
                 dialog.destroy()
             except ValueError:
                 messagebox.showerror("Error", "Age and Priority must be numbers")
@@ -1280,15 +1477,17 @@ class DashboardFrame(ctk.CTkFrame):
     
     def _on_refresh(self) -> None:
         self.bridge.send_command("STATS")
+        self.bridge.send_command("LIST")
     
     def cleanup(self) -> None:
         """Clean up resources when closing."""
         self.running = False
         try:
             self.sound_engine.stop_all()
+            self.sound_engine.cleanup()  # Release pygame mixer resources
         except Exception:
             pass
-        time.sleep(0.1) # Allow threads to exit
+        time.sleep(0.1)  # Allow threads to exit
         if not self.is_logging_out:
             try:
                 self.bridge.close()

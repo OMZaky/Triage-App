@@ -1,6 +1,7 @@
 #include "FibHeap.h"
 #include <iostream>
 #include <cmath> 
+#include <climits>
 #include <fstream>
 
 using namespace std;
@@ -50,11 +51,20 @@ void FibonacciHeap::_deleteAll(Node* node) {
 }
 
 void FibonacciHeap::insert(int id, int priority, int age, string name, string desc) {
+    // 1. Safety Check: Bounds
     if (id < 0 || id >= MAX_PID) {
         cout << "Error: ID out of bounds." << endl;
         return;
     }
 
+    // 2. CRITICAL FIX: Duplicate Prevention
+    // If this ID is already taken, do NOT create a new node.
+    if (nodeLookup[id] != nullptr) {
+        cout << "Error: Patient ID " << id << " already exists. Use UPDATE instead." << endl;
+        return;
+    }
+
+    // 3. Create and Insert Node
     Node* newNode = new Node(id, priority, age, name, desc);    
 
     if (minNode == nullptr) {
