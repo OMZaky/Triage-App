@@ -9,12 +9,12 @@ ARCHITECTURE:
 """
 
 import customtkinter as ctk
-from tkinter import messagebox
 import threading
-from typing import Callable, Optional
+from typing import Callable
 
 # Import the bridge for backend communication
 from bridge import SystemBridge
+from theme import COLORS
 
 class LoginFrame(ctk.CTkFrame):
     """
@@ -26,19 +26,6 @@ class LoginFrame(ctk.CTkFrame):
     - Robust cleanup handling
     """
     
-    # Color scheme (Matching dashboard.py - WCAG AA compliant)
-    COLORS = {
-        "bg_dark": "#0f0f1a",     # Primary background (same as dashboard)
-        "bg_card": "#1a1a2e",     # Card surfaces
-        "bg_input": "#1e1e38",    # Input fields - darkened for contrast
-        "accent": "#00d4ff",      # Cyan accent
-        "accent_hover": "#00a8cc",
-        "text": "#ffffff",
-        "text_muted": "#b0b0b0",  # Bumped for readability
-        "error": "#ff6b7a",       # Brightened critical red
-        "success": "#2ed573",     # Green
-    }
-    
     def __init__(self, master, bridge: SystemBridge, on_success_callback: Callable[[], None]):
         """
         Initialize the login frame.
@@ -48,7 +35,7 @@ class LoginFrame(ctk.CTkFrame):
             bridge: SystemBridge instance
             on_success_callback: Function to run on login success
         """
-        super().__init__(master, fg_color=self.COLORS["bg_dark"])
+        super().__init__(master, fg_color=COLORS["bg_dark"])
         
         self.bridge = bridge
         self.on_success_callback = on_success_callback
@@ -80,7 +67,7 @@ class LoginFrame(ctk.CTkFrame):
         # === Centered Login Card ===
         self.card = ctk.CTkFrame(
             self,
-            fg_color=self.COLORS["bg_card"],
+            fg_color=COLORS["bg_card"],
             corner_radius=20,
             width=440,
             height=540
@@ -100,14 +87,14 @@ class LoginFrame(ctk.CTkFrame):
             self.card,
             text="SYSTEM LOGIN",
             font=ctk.CTkFont(size=24, weight="bold"),
-            text_color=self.COLORS["accent"]
+            text_color=COLORS["accent"]
         ).pack(pady=(0, 5))
         
         ctk.CTkLabel(
             self.card,
             text="TRIAGE O.S. - Emergency Room Management",
             font=ctk.CTkFont(size=12),
-            text_color=self.COLORS["text_muted"]
+            text_color=COLORS["text_muted"]
         ).pack(pady=(0, 30))
         
         # === Form Container ===
@@ -119,7 +106,7 @@ class LoginFrame(ctk.CTkFrame):
             form,
             text="Username:",
             font=ctk.CTkFont(size=12, weight="bold"),
-            text_color=self.COLORS["text"]
+            text_color=COLORS["text"]
         ).pack(anchor="w", pady=(0, 4))
         
         # Username input - High contrast styling
@@ -128,12 +115,12 @@ class LoginFrame(ctk.CTkFrame):
             font=ctk.CTkFont(size=14),
             height=45,
             corner_radius=10,
-            fg_color=self.COLORS["bg_input"],
+            fg_color=COLORS["bg_input"],
             text_color="#ffffff",
             border_width=2,
-            border_color=self.COLORS["accent"],
+            border_color=COLORS["accent"],
             placeholder_text="Enter username",
-            placeholder_text_color=self.COLORS["text_muted"]
+            placeholder_text_color=COLORS["text_muted"]
         )
         self.user_entry.pack(fill="x", pady=(0, 15))
         
@@ -142,7 +129,7 @@ class LoginFrame(ctk.CTkFrame):
             form,
             text="Password:",
             font=ctk.CTkFont(size=12, weight="bold"),
-            text_color=self.COLORS["text"]
+            text_color=COLORS["text"]
         ).pack(anchor="w", pady=(0, 4))
         
         # Password input - High contrast styling
@@ -151,12 +138,12 @@ class LoginFrame(ctk.CTkFrame):
             font=ctk.CTkFont(size=14),
             height=45,
             corner_radius=10,
-            fg_color=self.COLORS["bg_input"],
+            fg_color=COLORS["bg_input"],
             text_color="#ffffff",
             border_width=2,
-            border_color=self.COLORS["accent"],
+            border_color=COLORS["accent"],
             placeholder_text="Enter password",
-            placeholder_text_color=self.COLORS["text_muted"],
+            placeholder_text_color=COLORS["text_muted"],
             show="•"
         )
         self.pass_entry.pack(fill="x", pady=(0, 12))
@@ -166,7 +153,7 @@ class LoginFrame(ctk.CTkFrame):
             form,
             text="",
             font=ctk.CTkFont(size=12, weight="bold"),
-            text_color=self.COLORS["error"]
+            text_color=COLORS["error"]
         )
         self.error_label.pack(pady=(0, 8))
         
@@ -177,8 +164,8 @@ class LoginFrame(ctk.CTkFrame):
             font=ctk.CTkFont(size=14, weight="bold"),
             height=50,
             corner_radius=6,
-            fg_color=self.COLORS["accent"],
-            hover_color=self.COLORS["accent_hover"],
+            fg_color=COLORS["accent"],
+            hover_color=COLORS["accent_hover"],
             text_color="#0a0a14",  # Dark navy text for high contrast
             text_color_disabled="#ffffff",  # White text when disabled
             command=self._attempt_login
@@ -190,7 +177,7 @@ class LoginFrame(ctk.CTkFrame):
             self.card,
             text="Secure Medical Triage Platform",
             font=ctk.CTkFont(size=10),
-            text_color=self.COLORS["text_muted"]
+            text_color=COLORS["text_muted"]
         ).pack(side="bottom", pady=25)
         
         # === Event Bindings ===

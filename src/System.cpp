@@ -40,8 +40,15 @@ void System::run() {
         
         // 1. LOGIN
         if (command == "LOGIN") {
+            std::string line;
+            std::getline(std::cin, line);
+            std::istringstream iss(line);
+            
             std::string user, pass;
-            std::cin >> user >> pass;
+            if (!(iss >> user >> pass)) {
+                std::cout << "ERROR_LOGIN" << std::endl;
+                continue;
+            }
             
             if (auth.login(user, pass)) {
                 isLoggedIn = true;
@@ -53,8 +60,15 @@ void System::run() {
         
         // 2. CHANGE PASSWORD
         else if (command == "CHANGE_PASS") {
+            std::string line;
+            std::getline(std::cin, line);
+            std::istringstream iss(line);
+            
             std::string user, oldPass, newPass;
-            std::cin >> user >> oldPass >> newPass;
+            if (!(iss >> user >> oldPass >> newPass)) {
+                std::cout << "ERROR_PASS_CHANGE" << std::endl;
+                continue;
+            }
             
             if (auth.changePassword(user, oldPass, newPass)) {
                 std::cout << "SUCCESS_PASS_CHANGE" << std::endl;
@@ -95,9 +109,17 @@ void System::processCommand(std::string cmd) {
     
     // --- ADD PATIENT ---
     if (cmd == "ADD") {
+        std::string line;
+        std::getline(std::cin, line);
+        std::istringstream iss(line);
+        
         int prio, age;
         std::string name, desc;
-        std::cin >> prio >> age >> name >> desc;
+        
+        if (!(iss >> prio >> age >> name >> desc)) {
+            std::cout << "ERROR: Invalid ADD format. Expected: ADD <prio> <age> <name> <desc>" << std::endl;
+            return;
+        }
 
         if (prio < 1 || prio > 10) {
             std::cout << "ERROR: Priority must be 1-10" << std::endl;
@@ -155,24 +177,47 @@ void System::processCommand(std::string cmd) {
 
     // --- UPDATE ---
     else if (cmd == "UPDATE") {
+        std::string line;
+        std::getline(std::cin, line);
+        std::istringstream iss(line);
+        
         int id, newPrio;
-        std::cin >> id >> newPrio;
+        if (!(iss >> id >> newPrio)) {
+            std::cout << "ERROR: Invalid UPDATE format" << std::endl;
+            return;
+        }
         heap.updatePriority(id, newPrio); 
         std::cout << "SUCCESS_UPDATE" << std::endl;
     }
 
     // --- LEAVE ---
     else if (cmd == "LEAVE") {
+        std::string line;
+        std::getline(std::cin, line);
+        std::istringstream iss(line);
+        
         int id;
-        std::cin >> id;
+        if (!(iss >> id)) {
+            std::cout << "ERROR: Invalid LEAVE format" << std::endl;
+            return;
+        }
         heap.removePatient(id);
         std::cout << "SUCCESS_REMOVE " << id << std::endl;
     }
 
     // --- MERGE (Robust Version) ---
     else if (cmd == "MERGE") {
-        std::string filename;
-        std::cin >> filename;
+        std::string line;
+        std::getline(std::cin, line);
+        
+        // Trim leading whitespace and get the full filename (handles paths with spaces)
+        std::string filename = line;
+        size_t start = filename.find_first_not_of(" \t");
+        if (start == std::string::npos) {
+            std::cout << "ERROR: Invalid MERGE format" << std::endl;
+            return;
+        }
+        filename = filename.substr(start);
         
         std::ifstream file(filename);
         if (file.is_open()) {

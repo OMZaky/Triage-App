@@ -61,6 +61,7 @@ SYSTEM_FONT = get_system_font()
 from bridge import SystemBridge
 from login_window import LoginFrame
 from dashboard import DashboardFrame
+from theme import COLORS
 
 
 def find_backend_executable() -> str | None:
@@ -97,13 +98,6 @@ class TriageApp(ctk.CTk):
     - On logout, swaps back to LoginFrame
     """
     
-    # Colors matching dashboard.py
-    COLORS = {
-        "bg_dark": "#0f0f1a",
-        "bg_card": "#1a1a2e",
-        "accent": "#00d4ff",
-    }
-    
     def __init__(self, bridge: SystemBridge):
         super().__init__()
         
@@ -113,7 +107,7 @@ class TriageApp(ctk.CTk):
         # Window configuration
         self.title("TRIAGE O.S. - Emergency Room Management")
         self.minsize(1000, 700)
-        self.configure(fg_color=self.COLORS["bg_dark"])
+        self.configure(fg_color=COLORS["bg_dark"])
         
         # Responsive Sizing: Adapt to screen size
         screen_w = self.winfo_screenwidth()
